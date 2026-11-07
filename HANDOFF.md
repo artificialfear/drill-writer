@@ -37,6 +37,12 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - `applyDrop()` mutates the show and returns `{dropped, changed:[{label, sets}], newBig}`. Field editing, undo and tabs are locked while a drop is under review.
 - Known limit: in long forms (e.g. a 33-person arc) close-the-gap can still move ~1/3 of the form. That's inherent; the review shows mover counts per set so Emily can pick Leave the hole where it won't be seen.
 
+## Add a student (`planAdd` / `applyAdd` in `js/drop.js`)
+- Placement is relative to an anchor performer in every set. Options: hole (nearest remembered empty spot within 12 steps), end (one interval past the form end nearer the anchor), insert (anchor's shorter side shifts out one spot; new student takes the neighbor's old spot), stretch (n+1 re-spaced, ends fixed; closed loops re-space all round), beside (first free spot one interval away). Default: hole → end → beside.
+- `set.holes: [{x, y, was}]` written when a drop uses Leave the hole; removed when filled.
+- Saved line/arc/circle forms get the new id inserted at the right index; a block whose row changed length is forgotten (detection takes over).
+- Spots within 1 step of anyone are flagged, not blocked.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Show audio WILL be published with the show for students (Mat accepted that the MP3 is downloadable by anyone with the link).
@@ -48,6 +54,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 1. ✅ v0.1 — field, performers, props, sets, form tools, transforms, playback, step-size flags, per-performer coordinate table.
 1b. ✅ v0.2 — 3D view with bodies, camera presets.
 1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
+1d. ✅ v0.4 — Add a student to finished drill; remembered empty spots.
 2. Audio + tempo map: load MP3, tap-along beat marking, per-measure bpm, fermatas as count holds, two-way scrubbing.
 3. Performer view (pick drill ID → own dot sheet + highlighted animation + audio), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.

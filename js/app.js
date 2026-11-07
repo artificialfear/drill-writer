@@ -4,7 +4,7 @@ import {
   SECTIONS, sectionByKey, PROP_KINDS, uid, newShow, normalizeShow, sampleShow,
   setStarts, totalCounts, locate, positionsAt
 } from './model.js';
-import { planDrop, applyDrop } from './drop.js';
+import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('field');
@@ -243,6 +243,13 @@ function draw() {
       ctx.fillStyle = css('--muted'); ctx.fill();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // empty spots left by earlier drops
+  if (editing && opt.ghost) {
+    ctx.save(); ctx.setLineDash([3, 3]); ctx.strokeStyle = css('--muted'); ctx.lineWidth = 1.5;
+    for (const h of curSet().holes || []) { ctx.beginPath(); ctx.arc(sx(h.x), sy(h.y), Math.max(4, 0.75 * s), 0, Math.PI * 2); ctx.stroke(); }
+    ctx.restore();
   }
 
   // props
@@ -834,6 +841,7 @@ function dropMovers() {
 function renderDrop() {
   const box = $('dropBody'), d = state.drop;
   if (!d) { box.innerHTML = ''; return; }
+  if (d.mode === 'add') return d.report ? renderAddReport() : renderAdd();
   if (d.report) return renderDropReport();
   const p = state.show.performers.find(q => q.id === d.pid);
   const items = d.plans.map((pl, i) => {
@@ -843,7 +851,7 @@ function renderDrop() {
       : 'Not in an evenly spaced form — the spot stays empty';
     const opts = ['close', 'stretch', 'hole'].filter(k => pl.options[k]).map(k => {
       const n = Object.keys(pl.options[k]).length;
-      return `<option value="${k}"${d.choices[i] === k ? ' selected' : ''}>${FIX_NAMES[k]}${k === 'hole' ? '' : ` — ${n} move${n === 1 ? 's' : ''}`}</option>`;
+      return `<option value="${k}"${d.choices[i] === k ? ' selected' : ''}>${FIX_NAMES[k]}${k === 'hole' ? '' : ` — ${n} move${n === 1 ? '' : 's'}`}</option>`;
     }).join('');
     return `<li data-i="${i}" class="${i === state.cur ? 'current' : ''}"><strong>Set ${escapeHtml(st.name)}</strong>
       <select aria-label="Fix for set ${escapeHtml(st.name)}">${opts}</select><span class="what">${what}</span></li>`;
@@ -894,6 +902,7 @@ function renderDropReport() {
 function drawDropPreview(editing) {
   const d = state.drop;
   if (!d || d.report || !editing) return;
+  if (d.mode === 'add') return drawAddPreview();
   const pl = d.plans[state.cur]; if (!pl) return;
   const st = curSet(), s = state.view.scale, warn = css('--warn'), sel = css('--select');
   ctx.save();
@@ -915,6 +924,142 @@ function drawDropPreview(editing) {
   const D = st.pos[d.pid], X = sx(D.x), Y = sy(D.y), r = Math.max(6, 0.9 * s);
   ctx.strokeStyle = warn; ctx.lineWidth = 3;
   ctx.beginPath(); ctx.moveTo(X - r, Y - r); ctx.lineTo(X + r, Y + r); ctx.moveTo(X + r, Y - r); ctx.lineTo(X - r, Y + r); ctx.stroke();
+  ctx.restore();
+}
+
+// ---------------- Add a student to finished drill ----------------
+const ADD_NAMES = { hole: 'Fill empty spot', end: 'Add at end', insert: 'Insert next to', stretch: 'Stretch to fit', beside: 'Spot beside' };
+function nextLabel(sectionKey) {
+  const sec = sectionByKey(sectionKey);
+  let max = 0;
+  for (const p of state.show.performers) { const m = p.label.match(new RegExp(`^${sec.prefix}(\\d+)$`)); if (m) max = Math.max(max, +m[1]); }
+  return `${sec.prefix}${max + 1}`;
+}
+function startAdd() {
+  if (!state.show.performers.length) return toast('Use Add for the first performers — this is for adding someone to drill that is already written.');
+  if (state.mode === '3d') setMode('2d');
+  ensureAtSet();
+  const section = $('addSection').value;
+  const ids = selIds();
+  const anchor = ids.length === 1 ? ids[0]
+    : (state.show.performers.find(p => p.section === section) || state.show.performers[0]).id;
+  state.drop = { mode: 'add', perf: { id: uid('p'), label: nextLabel(section), section }, anchor, report: null };
+  replanAdd();
+  document.querySelector('.tabs').classList.add('locked');
+  showTab('drop'); renderDrop(); draw();
+}
+function replanAdd() {
+  const d = state.drop;
+  d.plans = planAdd(state.show, d.anchor);
+  d.choices = d.plans.map(p => p.def);
+}
+function addMovers() {
+  const movers = new Set(); let setsTouched = 0;
+  state.drop.plans.forEach((pl, i) => {
+    const m = Object.keys((pl.options[state.drop.choices[i]] || {}).moves || {});
+    if (m.length) setsTouched++;
+    m.forEach(id => movers.add(id));
+  });
+  return { movers, setsTouched };
+}
+function renderAdd() {
+  const d = state.drop, box = $('dropBody');
+  const anchorLabel = (state.show.performers.find(p => p.id === d.anchor) || {}).label || '';
+  const perfOpts = [...state.show.performers].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }))
+    .map(p => `<option value="${p.id}"${p.id === d.anchor ? ' selected' : ''}>${escapeHtml(p.label)}</option>`).join('');
+  const items = d.plans.map((pl, i) => {
+    const st = state.show.sets[i];
+    const what = pl.chain
+      ? `${escapeHtml(anchorLabel)} is in ${/^[aeiou]/i.test(KIND_NAMES[pl.chain.kind] || 'form') ? 'an' : 'a'} ${(KIND_NAMES[pl.chain.kind] || 'form').toLowerCase()} of ${pl.chain.ids.length}`
+      : `${escapeHtml(anchorLabel)} isn't in an evenly spaced form here`;
+    const opts = ['hole', 'end', 'insert', 'stretch', 'beside'].filter(k => pl.options[k]).map(k => {
+      const n = Object.keys(pl.options[k].moves).length;
+      return `<option value="${k}"${d.choices[i] === k ? ' selected' : ''}>${ADD_NAMES[k]} · ${n ? `${n} move${n === 1 ? '' : 's'}` : 'no moves'}</option>`;
+    }).join('');
+    const o = pl.options[d.choices[i]];
+    const A = st.pos[d.anchor];
+    const far = o && A ? Math.round(Math.hypot(o.spot.x - A.x, o.spot.y - A.y)) : 0;
+    const where = o ? `${o.note ? escapeHtml(o.note) + ' · ' : ''}${far} step${far === 1 ? '' : 's'} from ${escapeHtml(anchorLabel)}` : '';
+    const note = (o && o.warn ? `<span class="what" style="color:var(--warn)">⚠ New spot is ${escapeHtml(o.warn)}</span>` : '')
+      + (where ? `<span class="what">New dot: ${where}</span>` : '');
+    return `<li data-i="${i}" class="${i === state.cur ? 'current' : ''}"><strong>Set ${escapeHtml(st.name)}</strong>
+      <select aria-label="Placement for set ${escapeHtml(st.name)}">${opts}</select><span class="what">${what}</span>${note}</li>`;
+  }).join('');
+  const { movers, setsTouched } = addMovers();
+  box.innerHTML = `<div class="drop-head"><h3>Add a student</h3>
+      <p class="help">The new student is placed relative to someone already in the drill, in every set. Click a set to preview it: the green ＋ is the new dot, arrows show who moves.</p></div>
+    <div class="prop-edit" style="border:0;padding:0">
+      <label>Instrument <select id="addSec">${SECTIONS.map(x => `<option value="${x.key}"${x.key === d.perf.section ? ' selected' : ''}>${x.name}</option>`).join('')}</select></label>
+      <label>Drill ID <input id="addLabel" value="${escapeHtml(d.perf.label)}"></label>
+      <label>Place next to <select id="addAnchor">${perfOpts}</select></label>
+    </div>
+    <ol class="drop-sets">${items}</ol>
+    <div class="drop-foot">
+      <span class="drop-summary">${movers.size ? `${movers.size} student${movers.size === 1 ? '' : 's'} get new dots in ${setsTouched} set${setsTouched === 1 ? '' : 's'}` : 'Nobody else moves'}</span>
+      <div class="row"><button id="addApply" class="primary">Add ${escapeHtml(d.perf.label)}</button><button id="addCancel">Cancel</button></div>
+    </div>`;
+  $('addSec').onchange = ev => {
+    const auto = d.perf.label === nextLabel(d.perf.section);
+    d.perf.section = ev.target.value;
+    if (auto) d.perf.label = nextLabel(d.perf.section);
+    renderDrop();
+  };
+  $('addLabel').onchange = ev => { d.perf.label = ev.target.value.trim() || nextLabel(d.perf.section); renderDrop(); };
+  $('addAnchor').onchange = ev => { d.anchor = ev.target.value; replanAdd(); renderDrop(); draw(); };
+  box.querySelectorAll('.drop-sets li').forEach(li => {
+    const i = +li.dataset.i;
+    li.addEventListener('click', ev => { if (ev.target.tagName !== 'SELECT') { goToSet(i); renderDrop(); } });
+    li.querySelector('select').addEventListener('change', ev => { d.choices[i] = ev.target.value; if (state.cur !== i) goToSet(i); renderDrop(); draw(); });
+  });
+  $('addApply').onclick = () => {
+    if (state.show.performers.some(p => p.label === d.perf.label)) return toast(`${d.perf.label} is already taken — change the Drill ID.`);
+    pushUndo();
+    d.report = applyAdd(state.show, { ...d.perf }, d.plans, d.choices, stepSize);
+    state.sel = new Set([d.perf.id, ...d.report.changed.map(c => c.id)]); state.selProp = null;
+    document.querySelector('.tabs').classList.remove('locked');
+    changed(); renderDrop();
+  };
+  $('addCancel').onclick = () => endDrop();
+}
+function renderAddReport() {
+  const d = state.drop, r = d.report;
+  const list = r.changed.map(c => `<li><strong>${escapeHtml(c.label)}</strong> — set${c.sets.length > 1 ? 's' : ''} ${c.sets.map(escapeHtml).join(', ')}</li>`).join('');
+  const warns = r.newBig.map(w => `<li class="warn">${escapeHtml(w.label)}: ${escapeHtml(w.step)} into set ${escapeHtml(w.set)}</li>`).join('');
+  $('dropBody').innerHTML = `<div class="drop-head"><h3>${escapeHtml(d.perf.label)} added</h3>
+    <p class="help">Print ${escapeHtml(d.perf.label)}'s dot sheet${r.changed.length ? `, plus new sheets for these ${r.changed.length} students` : '. Nobody else moved'}.</p></div>
+    ${list ? `<ul class="report-list">${list}</ul>` : ''}
+    ${warns ? `<p class="help" style="margin-top:8px"><strong>Big steps to check:</strong></p><ul class="report-list">${warns}</ul>` : ''}
+    <div class="row" style="margin-top:10px"><button id="addCopy">Copy list</button><button id="addDone" class="primary">Done</button></div>
+    <p class="help">Play the show to check ${escapeHtml(d.perf.label)}'s paths — moves between sets with different placements can cross other people. Undo removes the new student.</p>`;
+  $('addCopy').onclick = async () => {
+    const text = [`${d.perf.label} added.`, ...(r.changed.length ? ['New dots for:', ...r.changed.map(c => `${c.label}: set ${c.sets.join(', ')}`)] : ['Nobody else moved.']),
+      ...(r.newBig.length ? ['', 'Check step size:', ...r.newBig.map(w => `${w.label}: ${w.step} into set ${w.set}`)] : [])].join('\n');
+    try { await navigator.clipboard.writeText(text); toast('Copied.'); } catch (e) { toast("Couldn't copy on this device."); }
+  };
+  $('addDone').onclick = () => endDrop('perf');
+}
+function drawAddPreview() {
+  const d = state.drop, pl = d.plans[state.cur]; if (!pl) return;
+  const st = curSet(), s = state.view.scale, sel = css('--select'), ok = css('--accent');
+  const o = pl.options[d.choices[state.cur]]; if (!o) return;
+  ctx.save();
+  if (pl.chain) {
+    ctx.strokeStyle = sel; ctx.globalAlpha = 0.3; ctx.lineWidth = Math.max(4, 1.2 * s); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); pl.chain.ids.forEach((id, i) => { const q = st.pos[id]; i ? ctx.lineTo(sx(q.x), sy(q.y)) : ctx.moveTo(sx(q.x), sy(q.y)); });
+    if (pl.chain.closed) ctx.closePath(); ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = sel; ctx.fillStyle = sel; ctx.lineWidth = 2;
+  for (const [id, q] of Object.entries(o.moves)) {
+    const a = st.pos[id], x0 = sx(a.x), y0 = sy(a.y), x1 = sx(q.x), y1 = sy(q.y);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(5, 0.5 * s);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - 0.45), y1 - h * Math.sin(ang - 0.45)); ctx.lineTo(x1 - h * Math.cos(ang + 0.45), y1 - h * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+  }
+  const X = sx(o.spot.x), Y = sy(o.spot.y), r = Math.max(7, 1 * s);
+  ctx.strokeStyle = o.warn ? css('--warn') : ok; ctx.lineWidth = 3.5;
+  ctx.beginPath(); ctx.moveTo(X - r, Y); ctx.lineTo(X + r, Y); ctx.moveTo(X, Y - r); ctx.lineTo(X, Y + r); ctx.stroke();
+  ctx.fillStyle = ctx.strokeStyle; ctx.font = `600 ${Math.max(10, Math.min(13, 1.15 * s))}px system-ui, sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.fillText(d.perf.label, X, Y - r - 2);
   ctx.restore();
 }
 
@@ -1101,6 +1246,7 @@ function init() {
   $('btnAddPerf').onclick = () => addPerformers($('addSection').value, Math.max(1, Math.min(60, parseInt($('addCount').value, 10) || 1)));
   $('btnDelPerf').onclick = removeSelected;
   $('btnDropPerf').onclick = startDrop;
+  $('btnAddStudent').onclick = startAdd;
   $('btnRenumber').onclick = renumber;
   $('btnAddProp').onclick = () => addProp($('addPropKind').value);
 

@@ -95,6 +95,7 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 .chip { font-size: 12px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer; background: var(--panel); min-height: 0; }
 .chip.sel { border-color: var(--select); background: color-mix(in srgb, var(--select) 18%, transparent); }
 .prop-edit { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
+.prop-edit input, .prop-edit select { width: 100%; min-width: 0; }
 .prop-edit label { display: grid; grid-template-columns: 110px 1fr; align-items: center; font-size: 12px; }
 
 .dot-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -104,10 +105,11 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 
 .drop-head h3 { margin: 0 0 4px; }
 .drop-sets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.drop-sets li { border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: grid; grid-template-columns: 1fr auto; gap: 4px 8px; align-items: center; cursor: pointer; }
+.drop-sets li { border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: grid; grid-template-columns: auto 1fr; gap: 4px 8px; align-items: center; cursor: pointer; }
 .drop-sets li.current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .drop-sets .what { font-size: 12px; color: var(--muted); grid-column: 1 / -1; }
-.drop-sets select { min-width: 150px; }
+.drop-sets select { width: 100%; min-width: 0; }
+.drop-sets strong { white-space: nowrap; }
 .drop-summary { font-weight: 600; }
 .drop-foot { position: sticky; bottom: -10px; background: var(--panel); padding: 8px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
 .report-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }

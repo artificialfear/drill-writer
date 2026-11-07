@@ -152,6 +152,35 @@ with sync_playwright() as p:
     check('undo brings the student back', page.evaluate(f"__dw.show.performers.some(p=>p.id==='{drop_id}')"))
     page.click('#dropDone')
 
+    # add a student next to the same trumpet
+    page.evaluate(f"__dw.sel = new Set(['{drop_id}'])")
+    page.click('.tab[data-tab=perf]'); page.select_option('#addSection', 'trumpet'); page.click('#btnAddStudent')
+    page.wait_for_selector('#addApply')
+    check('new student gets next trumpet ID', page.input_value('#addLabel') == 'T7')
+    cur = page.evaluate('__dw.cur')
+    page.locator('.drop-sets li').nth(cur).locator('select').select_option('insert')
+    ins = page.evaluate(f"Object.keys(__dw.drop.plans[{cur}].options.insert.moves).length")
+    check('insert next to anchor moves only the shorter side', ins == 2)
+    page.screenshot(path=f'{SHOTS}/10-add-review.png')
+    n0 = page.evaluate('__dw.show.performers.length')
+    page.click('#addApply'); page.wait_for_selector('#addDone')
+    check('student added to every set', page.evaluate("__dw.show.performers.length") == n0 + 1 and page.evaluate("__dw.show.sets.every(s=>Object.keys(s.pos).length===__dw.show.performers.length)"))
+    check('add report names the movers', page.locator('.report-list li').count() == 2)
+    page.click('#btnUndo'); page.click('#addDone')
+    check('undo removes the added student', page.evaluate('__dw.show.performers.length') == n0)
+
+    # drop leaving a hole, then add fills it
+    page.evaluate(f"__dw.sel = new Set(['{tr[1]['id']}']); document.querySelector('#btnDropPerf').disabled=false")
+    page.click('#btnDropPerf'); page.wait_for_selector('#dropApply')
+    page.evaluate("document.querySelectorAll('.drop-sets select').forEach(s=>{s.value='hole'; s.dispatchEvent(new Event('change'))})")
+    page.click('#dropApply'); page.click('#dropDone')
+    check('leave-the-hole remembers the empty spot', page.evaluate('__dw.show.sets.every(s=>s.holes.length===1)'))
+    page.evaluate(f"__dw.sel = new Set(['{tr[0]['id']}'])")
+    page.click('#btnAddStudent'); page.wait_for_selector('#addApply')
+    check('add defaults to filling the empty spot', page.evaluate("__dw.drop.choices.every(c=>c==='hole')"))
+    page.click('#addApply'); page.click('#addDone')
+    check('filling the spot moves nobody and clears it', page.evaluate('__dw.show.sets.every(s=>s.holes.length===0)'))
+
     # 3D view
     page.set_viewport_size({'width': 1440, 'height': 860})
     page.click('#view3dBtn'); page.wait_for_function('__dw.v3 && __dw.v3.visible', timeout=15000); page.wait_for_timeout(1200)

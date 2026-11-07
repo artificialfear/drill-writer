@@ -141,19 +141,33 @@ export function applyDrop(show, pid, plans, choices, stepSize, setName = st => s
   for (let i = 1; i < show.sets.length; i++)
     for (const p of show.performers) if (stepSize(show.sets[i - 1].pos[p.id], show.sets[i].pos[p.id], show.sets[i].counts).big) bigBefore.add(`${i}|${p.id}`);
 
+  const droppedLabel = (show.performers.find(p => p.id === pid) || {}).label || '';
   show.sets.forEach((st, i) => {
     const moves = plans[i].options[choices[i]] || {};
     for (const [id, q] of Object.entries(moves)) st.pos[id] = { ...q };
+    // remember empty spots so a new student can fill them later
+    if (choices[i] === 'hole' && st.pos[pid]) (st.holes = st.holes || []).push({ x: st.pos[pid].x, y: st.pos[pid].y, was: droppedLabel });
     delete st.pos[pid];
     st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.filter(id => id !== pid) })).filter(f => f.ids.length > 1);
   });
   const dropped = show.performers.find(p => p.id === pid);
   show.performers = show.performers.filter(p => p.id !== pid);
 
+  return { dropped, ...diffReport(show, before, bigBefore, stepSize, setName) };
+}
+
+function bigSet(show, stepSize) {
+  const out = new Set();
+  for (let i = 1; i < show.sets.length; i++)
+    for (const p of show.performers) if (stepSize(show.sets[i - 1].pos[p.id], show.sets[i].pos[p.id], show.sets[i].counts).big) out.add(`${i}|${p.id}`);
+  return out;
+}
+function diffReport(show, before, bigBefore, stepSize, setName, skipId = null) {
   const changed = [];
   for (const p of show.performers) {
+    if (p.id === skipId) continue;
     const sets = [];
-    show.sets.forEach((st, i) => { if (dist(before[i][p.id], st.pos[p.id]) >= 0.01) sets.push(setName(st)); });
+    show.sets.forEach((st, i) => { if (before[i][p.id] && dist(before[i][p.id], st.pos[p.id]) >= 0.01) sets.push(setName(st)); });
     if (sets.length) changed.push({ id: p.id, label: p.label, sets });
   }
   const newBig = [];
@@ -162,5 +176,116 @@ export function applyDrop(show, pid, plans, choices, stepSize, setName = st => s
       const ss = stepSize(show.sets[i - 1].pos[p.id], show.sets[i].pos[p.id], show.sets[i].counts);
       if (ss.big && !bigBefore.has(`${i}|${p.id}`)) newBig.push({ label: p.label, set: setName(show.sets[i]), step: ss.label });
     }
-  return { dropped, changed, newBig };
+  return { changed, newBig };
+}
+
+// ---------------- Adding a student after the drill is written ----------------
+// The new student is placed relative to an anchor performer ("put them next to T4") in every set.
+// Options per set, fewest movers first:
+//   hole    — fill an empty spot left by an earlier drop (nobody moves)
+//   end     — add one interval past the end of the anchor's form nearest the anchor (nobody moves)
+//   insert  — open a spot right next to the anchor; the shorter side of the form steps out one spot
+//   stretch — insert next to the anchor and re-space the whole form between the same end points
+//   beside  — a free spot one interval from the anchor (used when the anchor isn't in a form)
+const NEAR = 1.0; // anything closer than 1 step to someone else gets flagged
+
+function freeSpot(st, A, s, ids) {
+  const tries = [[0, s], [0, -s], [-s, 0], [s, 0], [-s, s], [s, s], [-s, -s], [s, -s], [0, 2 * s], [0, -2 * s]];
+  for (const [dx, dy] of tries) {
+    const q = { x: r2(A.x + dx), y: r2(A.y + dy) };
+    if (ids.every(id => !st.pos[id] || dist(st.pos[id], q) >= Math.min(s, 2) * 0.75)) return q;
+  }
+  return { x: r2(A.x), y: r2(A.y + s) };
+}
+
+export function planAddSet(show, setIdx, anchor) {
+  const st = show.sets[setIdx];
+  const allIds = show.performers.map(p => p.id);
+  const A = st.pos[anchor];
+  const plan = { chain: null, options: {}, def: 'beside' };
+  if (!A) return plan;
+
+  const holes = (st.holes || []).map((h, i) => ({ ...h, i, d: dist(h, A) })).sort((a, b) => a.d - b.d);
+  if (holes.length && holes[0].d <= 12) plan.options.hole = { spot: { x: holes[0].x, y: holes[0].y }, moves: {}, holeIndex: holes[0].i, note: holes[0].was ? `${holes[0].was}'s old spot` : 'empty spot' };
+
+  const chain = savedChain(st, anchor) || detectChain(st, anchor, allIds);
+  plan.chain = chain;
+  let s = 2;
+  if (chain) {
+    const { ids, closed } = chain, n = ids.length, k = ids.indexOf(anchor);
+    const spots = ids.map(id => ({ ...st.pos[id] }));
+    const gaps = []; for (let i = 1; i < n; i++) gaps.push(dist(spots[i - 1], spots[i]));
+    s = median(gaps);
+    const ext = (a, b) => ({ x: r2(a.x + (a.x - b.x)), y: r2(a.y + (a.y - b.y)) }); // one interval past a, away from b
+    if (!closed) {
+      const startSide = k <= n - 1 - k;
+      // end
+      plan.options.end = { spot: startSide ? ext(spots[0], spots[1]) : ext(spots[n - 1], spots[n - 2]), moves: {}, at: startSide ? 0 : n };
+      // insert next to the anchor, toward the shorter side
+      const ins = { moves: {} };
+      if (startSide) {
+        ins.spot = k > 0 ? { ...spots[k - 1] } : ext(spots[0], spots[1]);
+        for (let j = 0; j < k; j++) ins.moves[ids[j]] = j > 0 ? { ...spots[j - 1] } : ext(spots[0], spots[1]);
+        ins.at = k;
+      } else {
+        ins.spot = k < n - 1 ? { ...spots[k + 1] } : ext(spots[n - 1], spots[n - 2]);
+        for (let j = k + 1; j < n; j++) ins.moves[ids[j]] = j < n - 1 ? { ...spots[j + 1] } : ext(spots[n - 1], spots[n - 2]);
+        ins.at = k + 1;
+      }
+      plan.options.insert = ins;
+      // stretch: same end points, n+1 evenly spaced, new student right after/before the anchor
+      const order = [...ids]; order.splice(ins.at, 0, '__new');
+      const { out } = respaceAlong(spots, false, order.length);
+      const st2 = { moves: {}, at: ins.at };
+      order.forEach((id, i) => { if (id === '__new') st2.spot = out[i]; else st2.moves[id] = out[i]; });
+      cleanMoves(st, st2.moves);
+      plan.options.stretch = st2;
+    } else {
+      // closed loop: insert after the anchor and re-space all the way round
+      const order = [...ids.slice(k + 1), ...ids.slice(0, k + 1)]; // anchor last, new student right after it
+      const all = ['__new', ...order];
+      const { cum } = respaceAlong(spots, true, all.length, 0);
+      const { out } = respaceAlong(spots, true, all.length, cum[k]);
+      const st2 = { moves: {}, at: k + 1 };
+      all.forEach((id, i) => { if (id === '__new') st2.spot = out[i]; else st2.moves[id] = out[i]; });
+      cleanMoves(st, st2.moves);
+      plan.options.stretch = st2;
+    }
+  }
+  plan.options.beside = { spot: freeSpot(st, A, Math.min(s, 4), allIds), moves: {} };
+
+  // flag spots that land on top of someone
+  for (const o of Object.values(plan.options)) {
+    const final = { ...st.pos, ...o.moves };
+    const crowd = show.performers.filter(p => final[p.id] && dist(final[p.id], o.spot) < NEAR).map(p => p.label);
+    if (crowd.length) o.warn = `within 1 step of ${crowd.join(', ')}`;
+  }
+  plan.def = plan.options.hole ? 'hole' : plan.options.end ? 'end' : 'beside';
+  return plan;
+}
+
+export function planAdd(show, anchor) {
+  return show.sets.map((st, i) => planAddSet(show, i, anchor));
+}
+
+export function applyAdd(show, perf, plans, choices, stepSize, setName = st => st.name) {
+  const before = show.sets.map(st => JSON.parse(JSON.stringify(st.pos)));
+  const bigBefore = bigSet(show, stepSize);
+  show.performers.push(perf);
+  show.sets.forEach((st, i) => {
+    const pl = plans[i], o = pl.options[choices[i]] || pl.options.beside;
+    for (const [id, q] of Object.entries(o.moves || {})) st.pos[id] = { ...q };
+    st.pos[perf.id] = { ...o.spot };
+    if (choices[i] === 'hole' && o.holeIndex != null) st.holes.splice(o.holeIndex, 1);
+    // keep a saved line/arc/circle form up to date so later drops still rebuild it
+    if (pl.chain && pl.chain.source === 'saved' && o.at != null) {
+      const f = (st.forms || []).find(f => f.ids.includes(pl.chain.ids[0]));
+      if (f && f.type !== 'block') {
+        const anchorIdx = f.ids.indexOf(pl.chain.ids[Math.min(o.at, pl.chain.ids.length - 1)]);
+        const idx = o.at >= pl.chain.ids.length ? f.ids.length : anchorIdx;
+        f.ids.splice(Math.max(0, idx), 0, perf.id);
+      } else if (f) st.forms = st.forms.filter(x => x !== f); // a block row changed length; forget the block
+    }
+  });
+  return diffReport(show, before, bigBefore, stepSize, setName, perf.id);
 }
