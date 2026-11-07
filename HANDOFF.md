@@ -30,15 +30,24 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - View choice is remembered per device (`drillwriter.view`).
 - Tests need `--use-angle=swiftshader --enable-unsafe-swiftshader` for WebGL in headless Chromium.
 
+## Drop a student (`js/drop.js`)
+- Sets now carry `forms: [{id, type: line|arc|block|circle, ids: [ordered], cols?}]`, written by `applyTargets()` when a form tool is used. A performer belongs to at most one form per set; drawing a new form removes them from older ones.
+- `planSet()` per set: use the saved form if its members are still evenly spaced (block → just the dropped student's row); otherwise `detectChain()` grows a chain of evenly spaced neighbors through the dot (longest of the candidate directions; tolerance allows curves; closed if the ends meet). No chain → only "Leave the hole".
+- Fixes: close = shorter side shifts one spot toward the hole (fewest movers, existing coordinates); stretch = re-space along the polyline with fixed ends (closed loops re-space all the way round); hole = no moves. Default is close (Mat's choice).
+- `applyDrop()` mutates the show and returns `{dropped, changed:[{label, sets}], newBig}`. Field editing, undo and tabs are locked while a drop is under review.
+- Known limit: in long forms (e.g. a 33-person arc) close-the-gap can still move ~1/3 of the form. That's inherent; the review shows mover counts per set so Emily can pick Leave the hole where it won't be seen.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Show audio WILL be published with the show for students (Mat accepted that the MP3 is downloadable by anyone with the link).
 - Guard get dots/coordinates like winds and percussion. Props/equipment are separate markers without dot sheets.
 - Students only see drill IDs, never names.
+- Drop default = Close the gap (fewest movers).
 
 ## Roadmap
 1. ✅ v0.1 — field, performers, props, sets, form tools, transforms, playback, step-size flags, per-performer coordinate table.
 1b. ✅ v0.2 — 3D view with bodies, camera presets.
+1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
 2. Audio + tempo map: load MP3, tap-along beat marking, per-measure bpm, fermatas as count holds, two-way scrubbing.
 3. Performer view (pick drill ID → own dot sheet + highlighted animation + audio), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.

@@ -107,9 +107,14 @@
       <p class="help">New performers appear in a line on the front sideline in every set. Click a section name to select that whole section.</p>
       <div id="perfList" class="perf-list"></div>
       <div class="row">
+        <button id="btnDropPerf" title="A student quit: remove their dot and close up their forms">Drop student…</button>
         <button id="btnRenumber" title="Renumber every section 1, 2, 3… left to right in the current set">Renumber</button>
-        <button id="btnDelPerf" class="danger" title="Remove the selected performers from the whole show">Remove selected</button>
+        <button id="btnDelPerf" class="danger" title="Delete the selected performers outright — nobody else moves">Delete</button>
       </div>
+    </div>
+
+    <div class="panel" id="tab-drop">
+      <div id="dropBody"></div>
     </div>
 
     <div class="panel" id="tab-props">

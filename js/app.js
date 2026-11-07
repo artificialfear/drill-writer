@@ -4,6 +4,7 @@ import {
   SECTIONS, sectionByKey, PROP_KINDS, uid, newShow, normalizeShow, sampleShow,
   setStarts, totalCounts, locate, positionsAt
 } from './model.js';
+import { planDrop, applyDrop } from './drop.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('field');
@@ -280,6 +281,7 @@ function draw() {
     }
   }
 
+  drawDropPreview(editing);
   drawToolPreview();
 }
 
@@ -412,10 +414,16 @@ function circleTargets(center) {
   order.forEach((id, i) => { const a = -Math.PI / 2 - i * 2 * Math.PI / n; out[id] = { x: r2(center.x + Math.cos(a) * R), y: r2(center.y + Math.sin(a) * R) }; });
   return out;
 }
-function applyTargets(t) {
+// Place performers and remember the form (type + member order) so a later drop can rebuild it cleanly.
+function applyTargets(t, type, extra = {}) {
   if (!t) return;
   pushUndo();
   for (const [id, q] of Object.entries(t)) curSet().pos[id] = q;
+  if (type) {
+    const ids = Object.keys(t), st = curSet();
+    st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.filter(id => !t[id]) })).filter(f => f.ids.length > 1);
+    if (ids.length > 1) st.forms.push({ id: uid('f'), type, ids, ...extra });
+  }
   changed();
 }
 function needSelection() {
@@ -426,6 +434,7 @@ function needSelection() {
 
 // ---------------- Selection transforms ----------------
 function transform(act) {
+  if (dropLocked()) return toast('Finish or cancel the drop first.');
   if (!state.show) return;
   ensureAtSet();
   const ids = selIds();
@@ -473,6 +482,7 @@ function transform(act) {
 }
 
 function nudge(dx, dy) {
+  if (dropLocked()) return;
   ensureAtSet();
   const ids = selIds();
   if (!ids.length && !state.selProp) return;
@@ -564,6 +574,7 @@ canvas.addEventListener('pointerdown', e => {
     canvas.style.cursor = 'grabbing';
     return;
   }
+  if (dropLocked()) { toast('Finish or cancel the drop first.'); return; }
   if (state.tool !== 'select') {
     if (!needSelection()) return;
     ensureAtSet();
@@ -571,11 +582,11 @@ canvas.addEventListener('pointerdown', e => {
     if (state.tool === 'line') state.pointer = { kind: 'line', a: sw, b: sw, free: e.shiftKey };
     else if (state.tool === 'arc') {
       state.arcPts.push(sw);
-      if (state.arcPts.length === 3) { const [p0, p1, pb] = state.arcPts; state.arcPts = []; applyTargets(arcTargets(p0, p1, pb)); }
+      if (state.arcPts.length === 3) { const [p0, p1, pb] = state.arcPts; state.arcPts = []; applyTargets(arcTargets(p0, p1, pb), 'arc'); }
       draw();
     }
-    else if (state.tool === 'block') applyTargets(blockTargets(sw));
-    else if (state.tool === 'circle') applyTargets(circleTargets(sw));
+    else if (state.tool === 'block') applyTargets(blockTargets(sw), 'block', { cols: opt.cols });
+    else if (state.tool === 'circle') applyTargets(circleTargets(sw), 'circle');
     return;
   }
   // select tool
@@ -657,7 +668,7 @@ function endPointer(e) {
     }
     draw(); return;
   }
-  if (g.kind === 'line') { applyTargets(lineTargets(g.a, g.b, g.free)); return; }
+  if (g.kind === 'line') { applyTargets(lineTargets(g.a, g.b, g.free), 'line'); return; }
   if (g.kind === 'drag') { if (g.moved) changed(); }
 }
 canvas.addEventListener('pointerup', endPointer);
@@ -736,6 +747,7 @@ function renderPerformers() {
   }
   if (!state.show.performers.length) box.innerHTML = '<p class="help">No performers yet. Pick a section above and add them.</p>';
   $('btnDelPerf').disabled = !state.sel.size;
+  $('btnDropPerf').disabled = state.sel.size !== 1;
 }
 
 function renderProps() {
@@ -779,7 +791,131 @@ function renderDotInfo() {
       <td class="${ss && ss.big ? 'big' : ''}">${ss ? ss.label : ''}</td></tr>`;
   });
   box.innerHTML = `<h3 style="margin:0 0 6px">${escapeHtml(p.label)} <span class="help">${sec.name}</span></h3>
-    <table class="dot-table"><thead><tr><th>Set</th><th>Cts</th><th>Side to side</th><th>Front to back</th><th>Step</th></tr></thead><tbody>${rows}</tbody></table>`;
+    <table class="dot-table"><thead><tr><th>Set</th><th>Cts</th><th>Side to side</th><th>Front to back</th><th>Step</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="row" style="margin-top:10px;align-items:center">
+      <label class="help">Instrument <select id="dotSection">${SECTIONS.map(x => `<option value="${x.key}"${x.key === p.section ? ' selected' : ''}>${x.name}</option>`).join('')}</select></label>
+      <button id="dotDrop">Drop student…</button>
+    </div>
+    <p class="help">An alternate taking over this dot? Nothing needs to change — they learn ${escapeHtml(p.label)}'s dot sheet. Change the instrument above if they play something different.</p>`;
+  $('dotSection').onchange = ev => { if (dropLocked()) return; pushUndo(); p.section = ev.target.value; changed(); };
+  $('dotDrop').onclick = startDrop;
+}
+
+// ---------------- Drop a student ----------------
+const FIX_NAMES = { close: 'Close the gap', stretch: 'Stretch to fill', hole: 'Leave the hole' };
+const KIND_NAMES = { line: 'Line', arc: 'Arc', block: 'Block row', circle: 'Circle' };
+const dropLocked = () => !!(state.drop && !state.drop.report);
+
+function startDrop() {
+  const ids = selIds();
+  if (ids.length !== 1) return toast('Select the one student who is dropping.');
+  if (state.mode === '3d') setMode('2d');
+  ensureAtSet();
+  state.drop = { pid: ids[0], plans: planDrop(state.show, ids[0]), report: null };
+  state.drop.choices = state.drop.plans.map(p => p.def);
+  document.querySelector('.tabs').classList.add('locked');
+  showTab('drop');
+  renderDrop(); draw();
+}
+function endDrop(tab = 'perf') {
+  state.drop = null;
+  document.querySelector('.tabs').classList.remove('locked');
+  showTab(tab); draw();
+}
+function dropMovers() {
+  const movers = new Set(); let setsTouched = 0;
+  state.drop.plans.forEach((pl, i) => {
+    const m = Object.keys(pl.options[state.drop.choices[i]] || {});
+    if (m.length) setsTouched++;
+    m.forEach(id => movers.add(id));
+  });
+  return { movers, setsTouched };
+}
+function renderDrop() {
+  const box = $('dropBody'), d = state.drop;
+  if (!d) { box.innerHTML = ''; return; }
+  if (d.report) return renderDropReport();
+  const p = state.show.performers.find(q => q.id === d.pid);
+  const items = d.plans.map((pl, i) => {
+    const st = state.show.sets[i];
+    const what = pl.chain
+      ? `${KIND_NAMES[pl.chain.kind] || 'Form'} of ${pl.chain.ids.length} · ${pl.chain.source === 'saved' ? 'drawn with a form tool' : 'found by spacing'}`
+      : 'Not in an evenly spaced form — the spot stays empty';
+    const opts = ['close', 'stretch', 'hole'].filter(k => pl.options[k]).map(k => {
+      const n = Object.keys(pl.options[k]).length;
+      return `<option value="${k}"${d.choices[i] === k ? ' selected' : ''}>${FIX_NAMES[k]}${k === 'hole' ? '' : ` — ${n} move${n === 1 ? 's' : ''}`}</option>`;
+    }).join('');
+    return `<li data-i="${i}" class="${i === state.cur ? 'current' : ''}"><strong>Set ${escapeHtml(st.name)}</strong>
+      <select aria-label="Fix for set ${escapeHtml(st.name)}">${opts}</select><span class="what">${what}</span></li>`;
+  }).join('');
+  const { movers, setsTouched } = dropMovers();
+  box.innerHTML = `<div class="drop-head"><h3>Drop ${escapeHtml(p.label)}</h3>
+      <p class="help">Choose how each set covers ${escapeHtml(p.label)}'s spot. Click a set to preview it on the field: the red ✕ is the empty spot, arrows show who moves. Nobody outside the form moves.</p></div>
+    <ol class="drop-sets">${items}</ol>
+    <div class="drop-foot">
+      <span class="drop-summary">${movers.size} student${movers.size === 1 ? '' : 's'} get new dots in ${setsTouched} set${setsTouched === 1 ? '' : 's'}</span>
+      <div class="row"><button id="dropApply" class="primary">Drop ${escapeHtml(p.label)}</button><button id="dropCancel">Cancel</button></div>
+      <p class="help">An alternate taking this exact spot? Cancel — no one needs to move.</p>
+    </div>`;
+  box.querySelectorAll('.drop-sets li').forEach(li => {
+    const i = +li.dataset.i;
+    li.addEventListener('click', ev => { if (ev.target.tagName !== 'SELECT') { goToSet(i); renderDrop(); } });
+    li.querySelector('select').addEventListener('change', ev => { d.choices[i] = ev.target.value; if (state.cur !== i) goToSet(i); renderDrop(); draw(); });
+  });
+  $('dropApply').onclick = applyDropNow;
+  $('dropCancel').onclick = () => endDrop();
+}
+function applyDropNow() {
+  const d = state.drop;
+  pushUndo();
+  d.report = applyDrop(state.show, d.pid, d.plans, d.choices, stepSize);
+  state.sel = new Set(d.report.changed.map(c => c.id)); state.selProp = null;
+  document.querySelector('.tabs').classList.remove('locked');
+  changed();
+  renderDrop();
+}
+function renderDropReport() {
+  const r = state.drop.report;
+  const list = r.changed.map(c => `<li><strong>${escapeHtml(c.label)}</strong> — set${c.sets.length > 1 ? 's' : ''} ${c.sets.map(escapeHtml).join(', ')}</li>`).join('');
+  const warns = r.newBig.map(w => `<li class="warn">${escapeHtml(w.label)}: ${escapeHtml(w.step)} into set ${escapeHtml(w.set)}</li>`).join('');
+  $('dropBody').innerHTML = `<div class="drop-head"><h3>${escapeHtml(r.dropped.label)} dropped</h3>
+    <p class="help">${r.changed.length ? `Only these ${r.changed.length} students have new dots — reprint just their dot sheets. They're selected on the field.` : 'Nobody else moved.'}</p></div>
+    ${list ? `<ul class="report-list">${list}</ul>` : ''}
+    ${warns ? `<p class="help" style="margin-top:8px"><strong>New big steps to check:</strong></p><ul class="report-list">${warns}</ul>` : ''}
+    <div class="row" style="margin-top:10px"><button id="dropCopy">Copy list</button><button id="dropDone" class="primary">Done</button></div>
+    <p class="help">Changed your mind? Undo (↶ or Ctrl+Z) brings ${escapeHtml(r.dropped.label)} back exactly as before.</p>`;
+  $('dropCopy').onclick = async () => {
+    const text = [`${r.dropped.label} dropped — new dots for:`, ...r.changed.map(c => `${c.label}: set ${c.sets.join(', ')}`),
+      ...(r.newBig.length ? ['', 'Check step size:', ...r.newBig.map(w => `${w.label}: ${w.step} into set ${w.set}`)] : [])].join('\n');
+    try { await navigator.clipboard.writeText(text); toast('Copied.'); } catch (e) { toast("Couldn't copy on this device."); }
+  };
+  $('dropDone').onclick = () => endDrop('perf');
+}
+function drawDropPreview(editing) {
+  const d = state.drop;
+  if (!d || d.report || !editing) return;
+  const pl = d.plans[state.cur]; if (!pl) return;
+  const st = curSet(), s = state.view.scale, warn = css('--warn'), sel = css('--select');
+  ctx.save();
+  if (pl.chain) { // outline the form
+    ctx.strokeStyle = sel; ctx.globalAlpha = 0.35; ctx.lineWidth = Math.max(4, 1.2 * s); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    pl.chain.ids.forEach((id, i) => { const q = st.pos[id]; i ? ctx.lineTo(sx(q.x), sy(q.y)) : ctx.moveTo(sx(q.x), sy(q.y)); });
+    if (pl.chain.closed) ctx.closePath();
+    ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  const moves = pl.options[d.choices[state.cur]] || {};
+  ctx.strokeStyle = sel; ctx.fillStyle = sel; ctx.lineWidth = 2;
+  for (const [id, q] of Object.entries(moves)) {
+    const a = st.pos[id], x0 = sx(a.x), y0 = sy(a.y), x1 = sx(q.x), y1 = sy(q.y);
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const ang = Math.atan2(y1 - y0, x1 - x0), h = Math.max(5, 0.5 * s);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x1 - h * Math.cos(ang - 0.45), y1 - h * Math.sin(ang - 0.45)); ctx.lineTo(x1 - h * Math.cos(ang + 0.45), y1 - h * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill();
+  }
+  const D = st.pos[d.pid], X = sx(D.x), Y = sy(D.y), r = Math.max(6, 0.9 * s);
+  ctx.strokeStyle = warn; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(X - r, Y - r); ctx.lineTo(X + r, Y + r); ctx.moveTo(X + r, Y - r); ctx.lineTo(X - r, Y + r); ctx.stroke();
+  ctx.restore();
 }
 
 const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -842,7 +978,10 @@ function removeSelected() {
   if (!confirm(`Remove ${ids.length} performer(s) from the whole show?`)) return;
   pushUndo();
   state.show.performers = state.show.performers.filter(p => !state.sel.has(p.id));
-  for (const st of state.show.sets) for (const id of ids) delete st.pos[id];
+  for (const st of state.show.sets) {
+    for (const id of ids) delete st.pos[id];
+    st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.filter(id => !state.sel.has(id)) })).filter(f => f.ids.length > 1);
+  }
   state.sel.clear();
   changed();
 }
@@ -961,6 +1100,7 @@ function init() {
   $('btnDelSet').onclick = deleteSet;
   $('btnAddPerf').onclick = () => addPerformers($('addSection').value, Math.max(1, Math.min(60, parseInt($('addCount').value, 10) || 1)));
   $('btnDelPerf').onclick = removeSelected;
+  $('btnDropPerf').onclick = startDrop;
   $('btnRenumber').onclick = renumber;
   $('btnAddProp').onclick = () => addProp($('addPropKind').value);
 
@@ -1000,6 +1140,7 @@ function init() {
     const tag = (e.target.tagName || '').toLowerCase();
     if (['input', 'textarea', 'select'].includes(tag)) return;
     const k = e.key, mod = e.ctrlKey || e.metaKey;
+    if (mod && dropLocked() && 'zya'.includes(k.toLowerCase())) { e.preventDefault(); return; }
     if (mod && k.toLowerCase() === 'z') { e.preventDefault(); e.shiftKey ? redo() : undo(); return; }
     if (mod && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (mod && k.toLowerCase() === 'a') { e.preventDefault(); state.show.performers.forEach(p => state.sel.add(p.id)); selectionChanged(); return; }
