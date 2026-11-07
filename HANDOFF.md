@@ -44,5 +44,4 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.
 
 ## Open items
-- Mat needs to create the repo and enable Pages before the first push.
 - How students open a show: probably `shows/<name>.json` + MP3 committed to the repo, loaded by `?show=` URL param (to build in step 3).
