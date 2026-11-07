@@ -61,14 +61,22 @@
 
   <section class="stage">
     <canvas id="field" tabindex="0" aria-label="Football field"></canvas>
+    <div id="view3d" class="view3d" hidden></div>
     <div class="hud">
       <span id="hudCoord"></span>
       <span id="hudHint"></span>
     </div>
     <div class="zoom">
-      <button id="zoomIn" title="Zoom in">+</button>
-      <button id="zoomOut" title="Zoom out">−</button>
-      <button id="zoomFit" title="Fit field">Fit</button>
+      <div class="seg" role="group" aria-label="View">
+        <button id="view2dBtn" class="on" title="Top-down editing view">2D</button>
+        <button id="view3dBtn" title="3D view with bodies (watch only)">3D</button>
+      </div>
+      <span class="zoom2d">
+        <button id="zoomIn" title="Zoom in">+</button>
+        <button id="zoomOut" title="Zoom out">−</button>
+        <button id="zoomFit" title="Fit field">Fit</button>
+      </span>
+      <select id="camSelect" class="zoom3d" title="Camera" hidden></select>
     </div>
   </section>
 

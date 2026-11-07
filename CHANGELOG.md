@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 — 2026-11-07
+- New 3D view (2D / 3D switch on the field). Marchers are simple bodies in section colors with horns, drums, keyboards or guard flags, and props show as solid blocks.
+- Camera presets: press box, field level, overhead, Side 1 end zone, backfield. Drag to orbit, scroll to zoom, right-drag to pan.
+- Marchers step on every count while moving and stand still on holds. Click a body to select it.
+- 3D is for watching; picking a drawing tool switches back to 2D.
+
 ## 0.1.0 — 2026-11-07
 - High school football field to scale (8-to-5 grid, HS/college/NFL hashes), Side 1 / Side 2 and front labeled.
 - Add performers by section with drill IDs (T1, M3, G5…). Guard, battery, front ensemble and drum major get their own marker shapes.

@@ -26,7 +26,7 @@ def check(name, cond):
     if not cond: fails.append(name)
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel='chromium')
+    browser = p.chromium.launch(channel='chromium', args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
     page = browser.new_page(viewport={'width': 1440, 'height': 860})
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
@@ -127,6 +127,18 @@ with sync_playwright() as p:
     check('arc runs from start to end point', abs(ends[0]['x'] + 20) < 0.05 and abs(ends[-1]['x'] - 20) < 0.05)
     check('arc bulges backward', max(q['y'] for q in arc) > 38)
     page.screenshot(path=f'{SHOTS}/5-arc.png')
+
+    # 3D view
+    page.set_viewport_size({'width': 1440, 'height': 860})
+    page.click('#view3dBtn'); page.wait_for_function('__dw.v3 && __dw.v3.visible', timeout=15000); page.wait_for_timeout(1200)
+    check('3D view opens', page.is_visible('#view3d canvas'))
+    check('drawing tool switches back to 2D', (page.click('[data-tool=line]') or True) and page.evaluate("__dw.mode") == '2d')
+    page.click('[data-tool=select]'); page.click('#view3dBtn'); page.wait_for_timeout(500)
+    page.select_option('#camSelect', 'field'); page.wait_for_timeout(600)
+    page.screenshot(path=f'{SHOTS}/7-3d-field.png')
+    page.click('#btnPlay'); page.wait_for_timeout(800); page.click('#btnPlay')
+    check('playback runs in 3D', page.evaluate('__dw.count') > 0)
+    page.click('#view2dBtn')
 
     # tablet width
     page.set_viewport_size({'width': 820, 'height': 1180}); page.wait_for_timeout(200)

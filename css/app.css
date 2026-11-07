@@ -54,7 +54,16 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 .hud { position: absolute; left: 10px; top: 8px; display: flex; flex-direction: column; gap: 3px; pointer-events: none; }
 .hud span { background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; font-size: 12px; width: fit-content; }
 .hud span:empty { display: none; }
-.zoom { position: absolute; right: 10px; top: 8px; display: flex; gap: 4px; }
+.zoom { position: absolute; right: 10px; top: 8px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.zoom2d { display: flex; gap: 4px; }
+.zoom2d[hidden] { display: none; }
+.seg { display: flex; }
+.seg button { border-radius: 0; min-width: 40px; font-weight: 600; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; border-left: 0; }
+.seg button.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.view3d { position: absolute; inset: 0; }
+.view3d[hidden] { display: none; }
 
 .sidebar { border-left: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; min-height: 0; }
 .tabs { display: grid; grid-template-columns: repeat(4, 1fr); border-bottom: 1px solid var(--line); }

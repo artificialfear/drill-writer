@@ -217,7 +217,7 @@ function propCorners(pp, prop) {
 }
 
 function draw() {
-  if (!state.show || !W) return;
+  if (!state.show || !W || state.mode === '3d') return;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   drawField();
   const s = state.view.scale;
@@ -495,9 +495,55 @@ const toolHints = {
 };
 function setTool(t) {
   state.tool = t; state.arcPts = [];
+  if (state.mode === '3d' && t !== 'select') setMode('2d'); // drawing tools only work top-down
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
-  $('hudHint').textContent = toolHints[t] || '';
+  $('hudHint').textContent = state.mode === '3d' ? HINT_3D : (toolHints[t] || '');
   canvas.style.cursor = t === 'pan' ? 'grab' : (t === 'select' ? 'default' : 'crosshair');
+  draw();
+}
+
+// ---------------- 3D view ----------------
+const VIEW_KEY = 'drillwriter.view';
+const HINT_3D = '3D is for watching — drag to orbit, scroll to zoom, right-drag to pan · click a body to select · switch to 2D to edit';
+const isDark = () => document.documentElement.dataset.theme
+  ? document.documentElement.dataset.theme === 'dark'
+  : matchMedia('(prefers-color-scheme: dark)').matches;
+let view3dMod = null;
+async function setMode(mode) {
+  if (mode === state.mode) return;
+  if (mode === '3d' && !state.v3) {
+    try {
+      view3dMod = view3dMod || await import('./view3d.js');
+      $('camSelect').innerHTML = view3dMod.CAMERA_PRESETS.map(c => `<option value="${c.key}">${c.name}</option>`).join('');
+      state.v3 = view3dMod.create3D($('view3d'), {
+        getFrame: () => ({
+          show: state.show, frame: positionsAt(state.show, state.count), count: state.count,
+          sel: state.sel, selProp: state.selProp, labels: opt.labels, dark: isDark()
+        }),
+        onPick: (id, multi) => {
+          if (!id) { if (!multi) { state.sel.clear(); state.selProp = null; } }
+          else if (multi) state.sel.has(id) ? state.sel.delete(id) : state.sel.add(id);
+          else { state.sel.clear(); state.selProp = null; state.sel.add(id); }
+          selectionChanged();
+        }
+      });
+    } catch (e) {
+      console.warn(e);
+      toast("3D view couldn't start on this device (it needs WebGL).");
+      return;
+    }
+  }
+  state.mode = mode;
+  const on3 = mode === '3d';
+  $('view2dBtn').classList.toggle('on', !on3); $('view3dBtn').classList.toggle('on', on3);
+  $('camSelect').hidden = !on3;
+  document.querySelector('.zoom2d').hidden = on3;
+  canvas.style.visibility = on3 ? 'hidden' : '';
+  $('hudCoord').textContent = '';
+  if (on3) { if (state.tool !== 'select') setTool('select'); state.v3.show(); }
+  else if (state.v3) state.v3.hide();
+  $('hudHint').textContent = on3 ? HINT_3D : (toolHints[state.tool] || '');
+  try { localStorage.setItem(VIEW_KEY, mode); } catch (e) {}
   draw();
 }
 
@@ -883,6 +929,9 @@ function init() {
   $('zoomIn').onclick = () => zoomAt(W / 2, H / 2, 1.25);
   $('zoomOut').onclick = () => zoomAt(W / 2, H / 2, 0.8);
   $('zoomFit').onclick = () => { state.userView = false; fitView(); draw(); };
+  $('view2dBtn').onclick = () => setMode('2d');
+  $('view3dBtn').onclick = () => setMode('3d');
+  $('camSelect').onchange = ev => state.v3 && state.v3.setCamera(ev.target.value);
 
   $('btnNew').onclick = () => { if (confirm('Start a new, empty show? Save this one first if you want to keep it.')) loadShow(newShow()); };
   $('btnSample').onclick = () => { if (!state.show.performers.length || confirm('Replace the current show with the sample show?')) loadShow(sampleShow()); };
@@ -974,7 +1023,9 @@ function init() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) {}
   loadShow(saved && saved.app === 'drill-writer' ? saved : newShow());
+  state.mode = '2d';
   setTool('select');
   resize();
+  try { if (localStorage.getItem(VIEW_KEY) === '3d') setMode('3d'); } catch (e) {}
 }
 init();

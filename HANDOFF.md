@@ -23,6 +23,13 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Form tools order performers by their projection along the new form's direction, to avoid crossing paths.
 - `window.__dw` exposes state for tests.
 
+## 3D view (`js/view3d.js`)
+- Three.js r187 + OrbitControls bundled with esbuild into `vendor/three-bundle.min.js` (no CDN). Loaded with a dynamic import the first time 3D is turned on, so 2D stays light.
+- Mapping: Three X = x, Z = FIELD_DEPTH/2 - y (audience toward +Z), Y up. Units stay steps; a body is ~3.3 steps tall.
+- Watch-only. It reads state every frame through `getFrame()`; rebuilds bodies/props only when the performer/prop list changes. Everyone faces the front (no facing data yet). Legs swing one step per count when a performer's position changes in the current transition.
+- View choice is remembered per device (`drillwriter.view`).
+- Tests need `--use-angle=swiftshader --enable-unsafe-swiftshader` for WebGL in headless Chromium.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Show audio WILL be published with the show for students (Mat accepted that the MP3 is downloadable by anyone with the link).
@@ -31,9 +38,10 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 
 ## Roadmap
 1. ✅ v0.1 — field, performers, props, sets, form tools, transforms, playback, step-size flags, per-performer coordinate table.
+1b. ✅ v0.2 — 3D view with bodies, camera presets.
 2. Audio + tempo map: load MP3, tap-along beat marking, per-measure bpm, fermatas as count holds, two-way scrubbing.
 3. Performer view (pick drill ID → own dot sheet + highlighted animation + audio), printable dot sheets (PDF), collision check.
-4. Later: curved paths / follow-the-leader, guard facing, sub-sets ("3A"), Band Ninja-style roster import.
+4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.
 
 ## Open items
 - Mat needs to create the repo and enable Pages before the first push.
