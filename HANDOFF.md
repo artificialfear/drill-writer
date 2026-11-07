@@ -43,6 +43,15 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Saved line/arc/circle forms get the new id inserted at the right index; a block whose row changed length is forgotten (detection takes over).
 - Spots within 1 step of anyone are flagged, not blocked.
 
+## Rehearsal mode (`js/rehearse.js`)
+- Web Audio scheduler: all count-off + click sounds are scheduled up front on the AudioContext clock under one master gain (disconnect = instant stop). The drill is driven from `ctx.currentTime - (delayMs + outputLatency)`, so audio and animation can't drift.
+- Sounds are synthesized (cowbell = two squares through a band-pass; click; woodblock; beep). Spoken numbers use speechSynthesis on timers (can lag; count-off only).
+- Count-off pattern = array of 0/1/2 (off/on/accent), length 4 or 8, played at the tempo of the first transition × rehearsal %. Default "1 · 3 · 1 2 3 4" = [2,0,1,0,2,1,1,1] (Mat's request).
+- `set.bpm` = tempo INTO that set (null = show tempo). `buildTimeline()` turns counts into beat times; this is the hook the session-2 MP3 tempo map replaces (audio would start at the From set's time after the count-off).
+- Settings are per device (`drillwriter.rehearse`). Touching the field / any edit stops the rep (`pause()` stops rehearsal).
+- One device + speaker runs reps for the band (Mat's choice); phones can't be kept in sync without a network.
+- Test quirk: Playwright `select_option(value='2')` picked the option LABELED "2" (value 1) because set names are numbers — set selects via JS in tests.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):
@@ -62,6 +71,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 1b. ✅ v0.2 — 3D view with bodies, camera presets.
 1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
 1d. ✅ v0.4 — Add a student to finished drill; remembered empty spots.
+1e. ✅ v0.5 — Rehearse: count-off + click track over a range of sets, per-set tempo.
 2. Session 2 — Audio + tempo map in the editor: load local MP3, waveform, count-1 offset, typed per-measure tempos then tap-along to fix rits/accels, fermatas as count holds, two-way scrubbing, playback speed, audio-delay setting, duration check.
 3. Session 3 — Publish for students (encrypted bundle, link + QR, service worker/offline) + performer view (pick drill ID → own dot sheet + highlighted 2D/3D animation + synced music), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.

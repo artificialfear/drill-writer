@@ -26,7 +26,7 @@ def check(name, cond):
     if not cond: fails.append(name)
 
 with sync_playwright() as p:
-    browser = p.chromium.launch(channel='chromium', args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader'])
+    browser = p.chromium.launch(channel='chromium', args=['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--autoplay-policy=no-user-gesture-required'])
     page = browser.new_page(viewport={'width': 1440, 'height': 860})
     errors = []
     page.on('pageerror', lambda e: errors.append(str(e)))
@@ -66,8 +66,8 @@ with sync_playwright() as p:
     moved = page.evaluate('__dw.show.performers.map(p=>__dw.show.sets[1].pos[p.id].y - __dw.show.sets[0].pos[p.id].y)')
     check('nudge moves 16 steps back in set 2 only', all(abs(d - 16) < 0.01 for d in moved))
     check('16 steps in 16 counts is not flagged', page.evaluate("document.querySelectorAll('#setList li.warn').length") == 0)
-    page.locator('#setList li').nth(1).locator('.counts input').fill('8')
-    page.locator('#setList li').nth(1).locator('.counts input').press('Enter')
+    page.locator('#setList li').nth(1).locator('.counts input[aria-label=Counts]').fill('8')
+    page.locator('#setList li').nth(1).locator('.counts input[aria-label=Counts]').press('Enter')
     check('16 steps in 8 counts is flagged as too big', page.evaluate("document.querySelectorAll('#setList li.warn').length") == 1)
 
     # undo restores counts
@@ -180,6 +180,32 @@ with sync_playwright() as p:
     check('add defaults to filling the empty spot', page.evaluate("__dw.drop.choices.every(c=>c==='hole')"))
     page.click('#addApply'); page.click('#addDone')
     check('filling the spot moves nobody and clears it', page.evaluate('__dw.show.sets.every(s=>s.holes.length===0)'))
+
+    # rehearsal mode: sets 1 → 3 at a fast tempo
+    page.click('#btnSample'); page.wait_for_timeout(200)
+    page.click('.tab[data-tab=sets]')
+    for i in (1, 2):
+        ti = page.locator('#setList li').nth(i).locator('.tempo-in'); ti.fill('300'); ti.press('Enter')
+    check('per-set tempo saved', page.evaluate('__dw.show.sets[1].bpm === 300 && __dw.show.sets[2].bpm === 300'))
+    page.click('#btnRehearse')
+    check('rehearse panel opens', page.is_visible('#rhGo'))
+    check('default count-off is 1 . 3 . 1 2 3 4', page.evaluate('JSON.stringify(__rh.settings.beats)') == '[2,0,1,0,2,1,1,1]')
+    page.evaluate("(()=>{for (const [id,v] of [['#rhFrom','0'],['#rhTo','2']]) { const s=document.querySelector(id); s.value=v; s.dispatchEvent(new Event('change')); }})()")
+    page.evaluate("document.querySelector('#rhPct').value=120; document.querySelector('#rhPct').dispatchEvent(new Event('input'))")
+    check('tempo label shows 360', '360' in page.inner_text('#rhPctLabel'))
+    page.click('#rhGo'); page.wait_for_timeout(700)
+    check('count-off shows big number', page.is_visible('#bigCount') and page.evaluate("document.querySelector('#bigCount').classList.contains('countoff')"))
+    page.screenshot(path=f'{SHOTS}/11-rehearse-countoff.png')
+    page.wait_for_timeout(4500)
+    check('run is moving the drill', 0 < page.evaluate('__dw.count') < 48)
+    page.screenshot(path=f'{SHOTS}/12-rehearse-run.png')
+    page.wait_for_function('!__rh.engine.running', timeout=15000)
+    check('run stops on the last set', page.evaluate('__dw.cur') == 2 and abs(page.evaluate('__dw.count') - 48) < 0.01)
+    check('6 count-off sounds + 49 clicks scheduled', page.evaluate('__rh.engine.stats.scheduled') == 55)
+    # stop mid-run
+    page.click('#rhGo'); page.wait_for_timeout(2500); page.click('#rhStop')
+    check('stop button stops the rep', not page.evaluate('__rh.engine.running') and not page.evaluate('__dw.playing'))
+    page.click('.tab[data-tab=sets]')
 
     # 3D view
     page.set_viewport_size({'width': 1440, 'height': 860})

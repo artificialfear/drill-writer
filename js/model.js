@@ -138,6 +138,7 @@ export function normalizeShow(s) {
   show.sets.forEach((st, i) => {
     st.id = st.id || uid('s'); st.name = st.name ?? String(i + 1);
     st.counts = i === 0 ? 0 : Math.max(0, Number(st.counts) || 0);
+    st.bpm = Number(st.bpm) > 0 ? Math.max(30, Math.min(300, Number(st.bpm))) : null; // tempo into this set; null = show tempo
     st.pos = st.pos || {}; st.props = st.props || {}; st.note = st.note || '';
     st.holes = Array.isArray(st.holes) ? st.holes.filter(h => h && isFinite(h.x) && isFinite(h.y)) : [];
     st.forms = Array.isArray(st.forms) ? st.forms.filter(f => f && Array.isArray(f.ids)) : [];

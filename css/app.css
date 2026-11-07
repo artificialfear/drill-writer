@@ -79,9 +79,9 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 .set-list li.current { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .set-list li.warn .set-name::after { content: " ⚠"; color: var(--warn); }
 .set-list .set-name { display: flex; gap: 6px; align-items: center; }
-.set-list .set-name input { width: 70px; }
+.set-list .set-name input { width: 52px; }
 .set-list .counts { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
-.set-list .counts input { width: 56px; }
+.set-list .counts input { width: 48px; }
 .note-label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
 
 .add-perf { display: flex; gap: 6px; }
@@ -96,6 +96,8 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 .chip.sel { border-color: var(--select); background: color-mix(in srgb, var(--select) 18%, transparent); }
 .prop-edit { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--line); padding-top: 8px; }
 .prop-edit input, .prop-edit select { width: 100%; min-width: 0; }
+.prop-edit label.chk { display: flex; gap: 8px; font-size: 13px; }
+.prop-edit label.chk input { width: auto; }
 .prop-edit label { display: grid; grid-template-columns: 110px 1fr; align-items: center; font-size: 12px; }
 
 .dot-table { width: 100%; border-collapse: collapse; font-size: 12px; }
@@ -115,6 +117,24 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 .report-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
 .report-list .warn { color: var(--warn); }
 .tabs.locked .tab { pointer-events: none; opacity: .45; }
+
+.beats { display: flex; gap: 4px; flex-wrap: wrap; }
+.beats button { width: 34px; min-height: 34px; padding: 0; font-weight: 700; }
+.beats button.b1 { background: color-mix(in srgb, var(--accent) 35%, var(--panel)); }
+.beats button.b2 { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.beats button.b0 { color: var(--muted); }
+.rh-tempo { display: flex; align-items: center; gap: 6px; }
+.rh-tempo input { flex: 1; }
+.rh-go { font-size: 16px; padding: 6px 18px; }
+details summary { cursor: pointer; font-weight: 600; margin: 6px 0; }
+.big-count { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); text-align: center; pointer-events: none;
+  background: color-mix(in srgb, var(--panel) 80%, transparent); border: 1px solid var(--line); border-radius: 16px; padding: 4px 28px 8px; z-index: 2; }
+.big-count[hidden] { display: none; }
+.big-count .bc-main { font-size: min(13vh, 120px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.big-count .bc-sub { font-size: min(3vh, 22px); font-weight: 600; color: var(--muted); }
+.big-count.countoff .bc-main { color: var(--warn); }
+.set-list .tempo-in { width: 52px; }
+#btnRehearse.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
 .transport { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-top: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
 .transport .play { width: 44px; font-size: 16px; }

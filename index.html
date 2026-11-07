@@ -62,6 +62,7 @@
   <section class="stage">
     <canvas id="field" tabindex="0" aria-label="Football field"></canvas>
     <div id="view3d" class="view3d" hidden></div>
+    <div id="bigCount" class="big-count" hidden><div class="bc-main"></div><div class="bc-sub"></div></div>
     <div class="hud">
       <span id="hudCoord"></span>
       <span id="hudHint"></span>
@@ -114,6 +115,40 @@
       </div>
     </div>
 
+    <div class="panel" id="tab-rehearse">
+      <div class="drop-head"><h3>Rehearse</h3>
+        <p class="help">Run a range of sets with a count-off and click track. Use one device and a speaker for the whole band.</p></div>
+      <div class="prop-edit" style="border:0;padding:0">
+        <label>From set <select id="rhFrom"></select></label>
+        <label>To set <select id="rhTo"></select></label>
+        <label>Tempo <span class="rh-tempo"><input id="rhPct" type="range" min="50" max="120" step="5" value="100"><span id="rhPctLabel">100%</span></span></label>
+      </div>
+      <div class="row"><button id="rhGo" class="primary rh-go">▶ Go</button><button id="rhStop">■ Stop</button></div>
+      <p id="rhStatus" class="help"></p>
+
+      <details open><summary>Count-off</summary>
+        <div class="prop-edit" style="border:0;padding:0">
+          <label>Pattern <select id="rhPreset"></select></label>
+          <div class="beats" id="rhBeats" aria-label="Count-off beats: tap to cycle off / on / accent"></div>
+          <label>Sound <select id="rhCountSound"></select></label>
+          <button id="rhPreview">Hear count-off</button>
+        </div>
+      </details>
+      <details open><summary>Click track &amp; reps</summary>
+        <div class="prop-edit" style="border:0;padding:0">
+          <label class="chk"><input id="rhClickOn" type="checkbox"> Click on every count</label>
+          <label>Click sound <select id="rhClickSound"></select></label>
+          <label class="chk"><input id="rhAccent" type="checkbox"> Accent the first count of each set</label>
+          <label>Volume <input id="rhVol" type="range" min="0" max="1" step="0.05"></label>
+          <label class="chk"><input id="rhRepeat" type="checkbox"> Repeat automatically</label>
+          <label>Seconds between reps <input id="rhGap" type="number" min="1" max="120"></label>
+          <label class="chk"><input id="rhBig" type="checkbox"> Big count display</label>
+          <label>Speaker delay (ms) <input id="rhDelay" type="number" min="0" max="1000" step="10" title="Bluetooth speakers play late — raise this until the drill lines up with what you hear"></label>
+        </div>
+      </details>
+      <p class="help">Bluetooth speaker? Raise <em>Speaker delay</em> until the dots move with the click you hear (often 150–300 ms).</p>
+    </div>
+
     <div class="panel" id="tab-drop">
       <div id="dropBody"></div>
     </div>
@@ -148,6 +183,7 @@
   <input id="scrub" type="range" min="0" max="0" step="0.01" value="0" aria-label="Timeline">
   <span id="countReadout" class="readout">Set 1</span>
   <label class="bpm">Tempo <input id="bpm" type="number" min="40" max="240" value="144"></label>
+  <button id="btnRehearse" title="Run reps with a count-off and click track (R)">Rehearse</button>
   <label class="chk"><input id="optGhost" type="checkbox" checked> Paths</label>
   <label class="chk"><input id="optLabels" type="checkbox" checked> Labels</label>
   <button id="btnUndo" title="Undo (Ctrl+Z)">↶</button>

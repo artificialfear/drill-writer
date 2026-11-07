@@ -5,6 +5,7 @@ import {
   setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
+import { createRehearsal, COUNTOFF_PRESETS, SOUNDS, DEFAULT_SETTINGS } from './rehearse.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('field');
@@ -708,12 +709,15 @@ function renderSets() {
     li.className = (i === state.cur ? 'current' : '') + (warns ? ' warn' : '');
     li.title = warns ? `${warns} performer(s) need a step bigger than 6 to 5` : `Starts at count ${starts[i]}`;
     li.innerHTML = `<span class="set-name">Set <input value="${escapeHtml(st.name)}" aria-label="Set name"></span>
-      <span class="counts">${i === 0 ? '<span>start</span>' : `<input type="number" min="0" value="${st.counts}" aria-label="Counts"> cts`}</span>`;
+      <span class="counts">${i === 0 ? '<span>start</span>' : `<input type="number" min="0" value="${st.counts}" aria-label="Counts"> cts
+        ♩<input class="tempo-in" type="number" min="30" max="300" value="${st.bpm || ''}" placeholder="${state.show.tempo.bpm}" title="Tempo into this set (blank = show tempo)" aria-label="Tempo into this set">`}</span>`;
     li.addEventListener('click', ev => { if (ev.target.tagName !== 'INPUT') goToSet(i); });
     li.querySelector('.set-name input').addEventListener('focus', () => { if (state.cur !== i) goToSet(i); });
     li.querySelector('.set-name input').addEventListener('change', ev => { pushUndo(); st.name = ev.target.value.trim() || String(i + 1); changed(); });
     const ci = li.querySelector('.counts input');
     if (ci) ci.addEventListener('change', ev => { pushUndo(); st.counts = Math.max(0, parseInt(ev.target.value, 10) || 0); state.count = setStarts(state.show)[state.cur]; changed(); });
+    const ti = li.querySelector('.tempo-in');
+    if (ti) ti.addEventListener('change', ev => { pushUndo(); const v = parseInt(ev.target.value, 10); st.bpm = v >= 30 && v <= 300 ? v : null; changed(); });
     list.appendChild(li);
   });
   $('setNote').value = curSet().note || '';
@@ -1162,6 +1166,7 @@ function play() {
   raf = requestAnimationFrame(tick);
 }
 function pause() {
+  if (rehearsal && rehearsal.running) rehearsal.stop();
   state.playing = false; cancelAnimationFrame(raf);
   $('btnPlay').textContent = '▶';
   updateTransport(); renderSets(); renderDotInfo(); draw();
@@ -1169,7 +1174,8 @@ function pause() {
 function tick(t) {
   if (!state.playing) return;
   const dt = (t - lastT) / 1000; lastT = t;
-  state.count += dt * (state.show.tempo.bpm || 144) / 60;
+  const L = locate(state.show, state.count), into = state.show.sets[Math.min(L.i + 1, state.show.sets.length - 1)];
+  state.count += dt * (into.bpm || state.show.tempo.bpm || 144) / 60;
   const total = totalCounts(state.show);
   if (state.count >= total) { state.count = total; state.cur = state.show.sets.length - 1; pause(); return; }
   state.cur = locate(state.show, state.count).i;
@@ -1190,6 +1196,136 @@ function updateTransport() {
   $('countReadout').textContent = txt;
   $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length;
 }
+
+// ---------------- Rehearsal mode ----------------
+const RH_KEY = 'drillwriter.rehearse';
+let rh = { ...DEFAULT_SETTINGS };
+try { rh = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(RH_KEY) || '{}') }; } catch (e) {}
+const saveRh = () => { try { localStorage.setItem(RH_KEY, JSON.stringify(rh)); } catch (e) {} };
+const rehearseOpen = () => $('tab-rehearse').classList.contains('active');
+let rhRange = null; // {from, to}
+
+const rehearsal = createRehearsal({
+  getShow: () => state.show,
+  onFrame: ({ phase, count, beatNum, run }) => {
+    state.count = count;
+    state.cur = locate(state.show, count).i;
+    updateTransport(); draw();
+    const bc = $('bigCount'), sets = state.show.sets;
+    bc.hidden = !rh.bigDisplay;
+    bc.classList.toggle('countoff', phase === 'countoff');
+    let main = '', sub = '';
+    if (phase === 'countoff') {
+      const b = run.opts.beats; let lab = '';
+      for (let i = 0; i <= Math.min(beatNum, b.length - 1); i++) if (b[i]) lab = String((i % 4) + 1);
+      main = lab; sub = `Set ${sets[run.opts.from].name} → ${sets[run.opts.to].name}${run.rep > 1 ? ` · rep ${run.rep}` : ''}`;
+    } else if (phase === 'run') {
+      const L = locate(state.show, count), into = count - setStarts(state.show)[L.i];
+      main = String(Math.floor(into) + 1);
+      sub = `Set ${sets[L.i].name} → ${sets[L.i + 1].name}${run.rep > 1 ? ` · rep ${run.rep}` : ''}`;
+    } else { main = sets[run.opts.to].name; sub = 'Hold'; }
+    bc.querySelector('.bc-main').textContent = main;
+    bc.querySelector('.bc-sub').textContent = sub;
+  },
+  onState: (st, info) => {
+    if (st === 'running') { state.playing = true; $('btnPlay').textContent = '⏸'; $('rhStatus').textContent = `Rep ${info.rep} — Space or ■ to stop.`; }
+    else if (st === 'gap') {
+      $('rhStatus').textContent = `Again in ${info.seconds} s…`;
+      const bc = $('bigCount'); bc.classList.remove('countoff');
+      bc.querySelector('.bc-sub').textContent = `Again in ${info.seconds} s · reset to set ${state.show.sets[rhRange.from].name}`;
+    } else if (st === 'stopped') {
+      state.playing = false; $('btnPlay').textContent = '▶';
+      $('rhStatus').textContent = rehearsal.stats.reps ? `Stopped after ${rehearsal.stats.reps} rep${rehearsal.stats.reps === 1 ? '' : 's'}.` : '';
+      setTimeout(() => { if (!rehearsal.running) $('bigCount').hidden = true; }, 1500);
+      state.cur = locate(state.show, state.count).i;
+      updateTransport(); renderSets(); renderDotInfo(); draw();
+    }
+  }
+});
+
+function fillRehearseSets() {
+  const opts = state.show.sets.map((st, i) => `<option value="${i}">${escapeHtml(st.name)}</option>`).join('');
+  const n = state.show.sets.length;
+  if (!rhRange || rhRange.to >= n) rhRange = { from: Math.min(state.cur, Math.max(0, n - 2)), to: n - 1 };
+  $('rhFrom').innerHTML = opts; $('rhTo').innerHTML = opts;
+  $('rhFrom').value = rhRange.from; $('rhTo').value = rhRange.to;
+}
+function renderBeats() {
+  const box = $('rhBeats'); box.innerHTML = '';
+  const len = rh.beats.length;
+  if (!len) { box.innerHTML = '<span class="help">No count-off — the run starts right away.</span>'; return; }
+  rh.beats.forEach((b, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'b' + b; btn.textContent = String((i % 4) + 1);
+    btn.title = ['Silent', 'On', 'Accent'][b] + ' — tap to change';
+    btn.onclick = () => { rh.beats[i] = (rh.beats[i] + 1) % 3; rh.preset = 'custom'; $('rhPreset').value = 'custom'; saveRh(); renderBeats(); };
+    box.appendChild(btn);
+  });
+  const lenBtn = document.createElement('button');
+  lenBtn.textContent = len === 8 ? '→4' : '→8'; lenBtn.title = len === 8 ? 'Make it 4 counts' : 'Make it 8 counts';
+  lenBtn.onclick = () => { rh.beats = len === 8 ? rh.beats.slice(0, 4) : [...rh.beats, 2, 1, 1, 1]; rh.preset = 'custom'; $('rhPreset').value = 'custom'; saveRh(); renderBeats(); };
+  box.appendChild(lenBtn);
+}
+function renderRehearse() {
+  fillRehearseSets();
+  $('rhPreset').innerHTML = Object.entries(COUNTOFF_PRESETS).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('') + '<option value="custom">Custom (tap the beats)</option>';
+  $('rhPreset').value = rh.preset;
+  const soundOpts = (withVoice) => Object.entries(SOUNDS).filter(([k]) => withVoice || k !== 'voice').map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+  $('rhCountSound').innerHTML = soundOpts(true); $('rhCountSound').value = rh.countSound;
+  $('rhClickSound').innerHTML = soundOpts(false); $('rhClickSound').value = rh.clickSound;
+  $('rhClickOn').checked = rh.clickOn; $('rhAccent').checked = rh.accentSets; $('rhVol').value = rh.volume;
+  $('rhRepeat').checked = rh.repeat; $('rhGap').value = rh.repeatGap; $('rhBig').checked = rh.bigDisplay; $('rhDelay').value = rh.delayMs;
+  $('rhPct').value = rh.tempoPct; updatePctLabel();
+  renderBeats();
+}
+function updatePctLabel() {
+  const from = +($('rhFrom').value || 0), st = state.show.sets[Math.min(from + 1, state.show.sets.length - 1)];
+  const bpm = Math.round((st.bpm || state.show.tempo.bpm) * rh.tempoPct / 100);
+  $('rhPctLabel').textContent = `${rh.tempoPct}% · ♩=${bpm}`;
+}
+function toggleRehearse(force) {
+  const open = force ?? !rehearseOpen();
+  if (open) {
+    if (dropLocked()) return toast('Finish or cancel the drop first.');
+    if (state.show.sets.length < 2) return toast('Add a second set to run reps.');
+    rhRange = { from: Math.min(state.cur, state.show.sets.length - 2), to: state.show.sets.length - 1 };
+    showTab('rehearse'); renderRehearse();
+  } else { if (rehearsal.running) pause(); showTab('sets'); }
+  $('btnRehearse').classList.toggle('on', open);
+}
+function startRehearsal() {
+  const from = +$('rhFrom').value, to = +$('rhTo').value;
+  if (!(to > from)) return toast('“To” has to be a later set than “From”.');
+  rhRange = { from, to };
+  if (state.playing) pause();
+  state.cur = from; state.count = setStarts(state.show)[from];
+  rehearsal.start({ from, to, beats: rh.beats, countSound: rh.countSound, clickOn: rh.clickOn, clickSound: rh.clickSound,
+    accentSets: rh.accentSets, volume: rh.volume, tempoPct: rh.tempoPct, repeat: rh.repeat, repeatGap: rh.repeatGap, delayMs: rh.delayMs });
+}
+function wireRehearse() {
+  $('btnRehearse').onclick = () => toggleRehearse();
+  $('rhGo').onclick = startRehearsal;
+  $('rhStop').onclick = () => pause();
+  $('rhFrom').onchange = ev => { rhRange.from = +ev.target.value; if (rhRange.to <= rhRange.from) { rhRange.to = Math.min(state.show.sets.length - 1, rhRange.from + 1); $('rhTo').value = rhRange.to; } goToSet(rhRange.from); updatePctLabel(); };
+  $('rhTo').onchange = ev => { rhRange.to = +ev.target.value; };
+  $('rhPct').oninput = ev => { rh.tempoPct = +ev.target.value; updatePctLabel(); saveRh(); };
+  $('rhPreset').onchange = ev => { rh.preset = ev.target.value; if (COUNTOFF_PRESETS[rh.preset]) rh.beats = [...COUNTOFF_PRESETS[rh.preset].beats]; saveRh(); renderBeats(); };
+  $('rhCountSound').onchange = ev => { rh.countSound = ev.target.value; saveRh(); };
+  $('rhClickSound').onchange = ev => { rh.clickSound = ev.target.value; saveRh(); };
+  $('rhClickOn').onchange = ev => { rh.clickOn = ev.target.checked; saveRh(); };
+  $('rhAccent').onchange = ev => { rh.accentSets = ev.target.checked; saveRh(); };
+  $('rhVol').oninput = ev => { rh.volume = +ev.target.value; saveRh(); };
+  $('rhRepeat').onchange = ev => { rh.repeat = ev.target.checked; saveRh(); };
+  $('rhGap').onchange = ev => { rh.repeatGap = Math.max(1, Math.min(120, +ev.target.value || 8)); saveRh(); };
+  $('rhBig').onchange = ev => { rh.bigDisplay = ev.target.checked; saveRh(); };
+  $('rhDelay').onchange = ev => { rh.delayMs = Math.max(0, Math.min(1000, +ev.target.value || 0)); saveRh(); };
+  $('rhPreview').onclick = () => {
+    const from = +$('rhFrom').value || 0, st = state.show.sets[Math.min(from + 1, state.show.sets.length - 1)];
+    rehearsal.preview(rh.beats, rh.countSound, rh.volume, (st.bpm || state.show.tempo.bpm) * rh.tempoPct / 100);
+  };
+  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => $('btnRehearse').classList.remove('on')));
+}
+window.__rh = { get engine() { return rehearsal; }, get settings() { return rh; } };
 
 // ---------------- Wiring ----------------
 function init() {
@@ -1247,6 +1383,7 @@ function init() {
   $('btnDelPerf').onclick = removeSelected;
   $('btnDropPerf').onclick = startDrop;
   $('btnAddStudent').onclick = startAdd;
+  wireRehearse();
   $('btnRenumber').onclick = renumber;
   $('btnAddProp').onclick = () => addProp($('addPropKind').value);
 
@@ -1291,7 +1428,8 @@ function init() {
     if (mod && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (mod && k.toLowerCase() === 'a') { e.preventDefault(); state.show.performers.forEach(p => state.sel.add(p.id)); selectionChanged(); return; }
     if (mod) return;
-    if (k === ' ') { e.preventDefault(); state.playing ? pause() : play(); return; }
+    if (k === ' ') { e.preventDefault(); if (rehearseOpen()) { rehearsal.running ? pause() : startRehearsal(); } else state.playing ? pause() : play(); return; }
+    if (k.toLowerCase() === 'r' && !e.shiftKey) { toggleRehearse(); return; }
     if (k === 'Escape') { state.arcPts = []; state.sel.clear(); state.selProp = null; setTool('select'); selectionChanged(); return; }
     const step = e.shiftKey ? 4 : 1;
     if (k === 'ArrowLeft') { e.preventDefault(); nudge(-step, 0); return; }
