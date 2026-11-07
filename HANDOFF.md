@@ -45,7 +45,14 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 
 ## Decisions Mat made
 - Repo under artificialfear.
-- Audio = MP3 reference recordings, loaded from each user's own device (editor and students) and kept in IndexedDB so it plays with no internet. NEVER commit or publish MP3s (public repo; publisher copyright). App must work offline: service worker caches the app + published show JSON. Tempo map lives in the show JSON; check MP3 duration matches the map's file. YouTube embed = optional online-only extra, not the main path.
+- Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):
+  - Editor loads the MP3 from Emily's computer (stays local).
+  - "Publish for students" encrypts the MP3 in the browser (Web Crypto AES-GCM, random 256-bit key) → bundle = show JSON + `audio.enc`. Only the encrypted file is ever committed to the public repo. NEVER commit a plain MP3.
+  - Student link/QR = `…/?show=<name>#k=<base64 key>`. The key lives only in the URL fragment (never sent to a server, never in the repo); the app saves it to localStorage after first open.
+  - Service worker caches app shell + show JSON + audio.enc; decrypt at play time. Republishing updates phones on next online open.
+  - Publishing for now = Mat uploads the bundle to the repo (github.com drag-and-drop, or ask Claude). No GitHub token in the browser.
+  - Not DRM — anyone with the link can listen; it just keeps the MP3 from being publicly downloadable/indexed. Emily to confirm her show license covers sharing rehearsal audio with her students.
+  - iOS Safari may evict site data after ~7 days unused → tell students to Add to Home Screen; reopening the link on Wi-Fi restores it. First open should be on Wi-Fi (3–8 MB per movement).
 - Guard get dots/coordinates like winds and percussion. Props/equipment are separate markers without dot sheets.
 - Students only see drill IDs, never names.
 - Drop default = Close the gap (fewest movers).
@@ -55,8 +62,8 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 1b. ✅ v0.2 — 3D view with bodies, camera presets.
 1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
 1d. ✅ v0.4 — Add a student to finished drill; remembered empty spots.
-2. Audio + tempo map: local MP3 via file picker → IndexedDB (per device), waveform, count 1 offset, typed per-measure tempos then tap-along to fix rits/accels, fermatas as count holds, two-way scrubbing, playback speed, audio-delay setting. Plus offline support (service worker) so the app opens on the field with no signal. Warn: iOS Safari may clear site storage after ~7 days unused unless added to Home Screen; managed Chromebooks may wipe on sign-out — test.
-3. Performer view (pick drill ID → own dot sheet + highlighted animation + audio), printable dot sheets (PDF), collision check.
+2. Session 2 — Audio + tempo map in the editor: load local MP3, waveform, count-1 offset, typed per-measure tempos then tap-along to fix rits/accels, fermatas as count holds, two-way scrubbing, playback speed, audio-delay setting, duration check.
+3. Session 3 — Publish for students (encrypted bundle, link + QR, service worker/offline) + performer view (pick drill ID → own dot sheet + highlighted 2D/3D animation + synced music), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.
 
 ## Open items
