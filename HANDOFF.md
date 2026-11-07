@@ -45,7 +45,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 
 ## Decisions Mat made
 - Repo under artificialfear.
-- Show audio WILL be published with the show for students (Mat accepted that the MP3 is downloadable by anyone with the link).
+- Audio = the publishers' reference recordings on their YouTube channels. Sync to an embedded YouTube player (IFrame API currentTime), in both the editor and the student view. Do NOT commit or publish MP3s (copyright). Optional fallback: a local file the user loads on their own device, never uploaded.
 - Guard get dots/coordinates like winds and percussion. Props/equipment are separate markers without dot sheets.
 - Students only see drill IDs, never names.
 - Drop default = Close the gap (fewest movers).
@@ -55,7 +55,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 1b. ✅ v0.2 — 3D view with bodies, camera presets.
 1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
 1d. ✅ v0.4 — Add a student to finished drill; remembered empty spots.
-2. Audio + tempo map: load MP3, tap-along beat marking, per-measure bpm, fermatas as count holds, two-way scrubbing.
+2. Audio + tempo map: YouTube link per show (IFrame API), count 1 offset, typed per-measure tempos first then tap-along to fix rits/accels, fermatas as count holds, two-way scrubbing, playback speed (drill follows), audio-delay setting. No waveform (YouTube gives no audio data) — nudge count marks by ear. Handle embedding-disabled videos and pre-roll ads.
 3. Performer view (pick drill ID → own dot sheet + highlighted animation + audio), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.
 
