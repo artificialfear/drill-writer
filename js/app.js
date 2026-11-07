@@ -1169,6 +1169,7 @@ function pause() {
   if (rehearsal && rehearsal.running) rehearsal.stop();
   state.playing = false; cancelAnimationFrame(raf);
   $('btnPlay').textContent = '▶';
+  if (!rehearsal.running) setTimeout(() => { if (!state.playing) $('bigCount').hidden = true; }, 1200);
   updateTransport(); renderSets(); renderDotInfo(); draw();
 }
 function tick(t) {
@@ -1180,6 +1181,7 @@ function tick(t) {
   if (state.count >= total) { state.count = total; state.cur = state.show.sets.length - 1; pause(); return; }
   state.cur = locate(state.show, state.count).i;
   updateTransport(); draw();
+  if (rh.bigInPlay) renderBigCount({ phase: 'run', count: state.count, run: null });
   raf = requestAnimationFrame(tick);
 }
 function updateTransport() {
@@ -1211,28 +1213,18 @@ const rehearsal = createRehearsal({
     state.count = count;
     state.cur = locate(state.show, count).i;
     updateTransport(); draw();
-    const bc = $('bigCount'), sets = state.show.sets;
-    bc.hidden = !rh.bigDisplay;
-    bc.classList.toggle('countoff', phase === 'countoff');
-    let main = '', sub = '';
-    if (phase === 'countoff') {
-      const b = run.opts.beats; let lab = '';
-      for (let i = 0; i <= Math.min(beatNum, b.length - 1); i++) if (b[i]) lab = String((i % 4) + 1);
-      main = lab; sub = `Set ${sets[run.opts.from].name} → ${sets[run.opts.to].name}${run.rep > 1 ? ` · rep ${run.rep}` : ''}`;
-    } else if (phase === 'run') {
-      const L = locate(state.show, count), into = count - setStarts(state.show)[L.i];
-      main = String(Math.floor(into) + 1);
-      sub = `Set ${sets[L.i].name} → ${sets[L.i + 1].name}${run.rep > 1 ? ` · rep ${run.rep}` : ''}`;
-    } else { main = sets[run.opts.to].name; sub = 'Hold'; }
-    bc.querySelector('.bc-main').textContent = main;
-    bc.querySelector('.bc-sub').textContent = sub;
+    if (rh.bigDisplay) renderBigCount({ phase, count, beatNum, run });
+    else $('bigCount').hidden = true;
   },
   onState: (st, info) => {
     if (st === 'running') { state.playing = true; $('btnPlay').textContent = '⏸'; $('rhStatus').textContent = `Rep ${info.rep} — Space or ■ to stop.`; }
     else if (st === 'gap') {
       $('rhStatus').textContent = `Again in ${info.seconds} s…`;
-      const bc = $('bigCount'); bc.classList.remove('countoff');
-      bc.querySelector('.bc-sub').textContent = `Again in ${info.seconds} s · reset to set ${state.show.sets[rhRange.from].name}`;
+      const bc = $('bigCount'); bc.className = 'big-count';
+      bc.querySelector('.bc-n').textContent = '↺'; bc.querySelector('.bc-of').textContent = '';
+      bc.querySelector('.bc-bar').innerHTML = '';
+      bc.querySelector('.bc-sub').textContent = `Back to set ${state.show.sets[rhRange.from].name}`;
+      bc.querySelector('.bc-next').textContent = `Next rep in ${info.seconds} s`;
     } else if (st === 'stopped') {
       state.playing = false; $('btnPlay').textContent = '▶';
       $('rhStatus').textContent = rehearsal.stats.reps ? `Stopped after ${rehearsal.stats.reps} rep${rehearsal.stats.reps === 1 ? '' : 's'}.` : '';
@@ -1242,6 +1234,63 @@ const rehearsal = createRehearsal({
     }
   }
 });
+
+// Does anyone move between set i and set i+1?
+function isHold(i) {
+  const A = state.show.sets[i], B = state.show.sets[i + 1];
+  if (!B) return true;
+  return state.show.performers.every(p => Math.hypot(A.pos[p.id].x - B.pos[p.id].x, A.pos[p.id].y - B.pos[p.id].y) < 0.01);
+}
+// Big count overlay: count (up or down) with the set's total, a segmented progress bar,
+// a warning color for the last 4 counts, HOLD for transitions where nobody moves, and what's next.
+function renderBigCount({ phase, count, beatNum, run }) {
+  const bc = $('bigCount'), sets = state.show.sets, starts = setStarts(state.show);
+  const el = c => bc.querySelector(c);
+  const toIdx = run ? run.opts.to : sets.length - 1;
+  const rep = run && run.rep > 1 ? ` · rep ${run.rep}` : '';
+  bc.hidden = false;
+  let n = '', of = '', sub = '', next = '', cls = 'big-count', bar = null;
+  const nextLine = i => { // what comes after transition i → i+1
+    if (i + 1 >= toIdx) return `Stop on set ${sets[toIdx].name}`;
+    const c = sets[i + 2].counts;
+    return isHold(i + 1) ? `Then hold ${c} on set ${sets[i + 1].name}` : `Then ${c} counts to set ${sets[i + 2].name}`;
+  };
+  if (phase === 'countoff') {
+    const b = run.opts.beats; let lab = '';
+    for (let i = 0; i <= Math.min(beatNum, b.length - 1); i++) if (b[i]) lab = String((i % 4) + 1);
+    n = lab; cls += ' countoff';
+    const f = run.opts.from, c1 = sets[f + 1].counts;
+    sub = `Ready · set ${sets[f].name}${rep}`;
+    next = isHold(f) ? `First: hold ${c1} counts` : `First: ${c1} counts to set ${sets[f + 1].name}`;
+  } else if (phase === 'run') {
+    const L = locate(state.show, count), total = sets[L.i + 1].counts;
+    const into = count - starts[L.i], cur = Math.min(total, Math.floor(into) + 1);
+    const hold = isHold(L.i);
+    if (rh.countMode === 'down') { n = String(total - cur + 1); of = total - cur + 1 === 1 ? 'left' : 'left'; }
+    else { n = String(cur); of = `/${total}`; }
+    sub = hold ? `HOLD on set ${sets[L.i].name}${rep}` : `Set ${sets[L.i].name} → ${sets[L.i + 1].name}${rep}`;
+    next = nextLine(L.i);
+    if (hold) cls += ' hold';
+    if (total >= 4 && cur > total - 4) cls += ' arriving';
+    if (into < 0.3 && L.i > (run ? run.opts.from : -1)) cls += ' arrive';
+    bar = { total, cur };
+  } else {
+    n = sets[toIdx].name; of = ''; sub = 'Set — hold'; next = run && run.opts.repeat ? '' : 'Done';
+  }
+  bc.className = cls;
+  el('.bc-n').textContent = n; el('.bc-of').textContent = of;
+  el('.bc-sub').textContent = sub; el('.bc-next').textContent = next;
+  // segmented bar: one segment per count (continuous bar for very long transitions)
+  const barEl = el('.bc-bar');
+  if (!bar) { barEl.innerHTML = ''; return; }
+  const key = `${bar.total}`;
+  if (barEl.dataset.key !== key) {
+    barEl.dataset.key = key;
+    barEl.innerHTML = bar.total <= 32 ? Array.from({ length: bar.total }, (_, i) => `<i class="${(i % 8 === 7 && i < bar.total - 1) ? 'eight' : ''}"></i>`).join('') : '<b></b>';
+  }
+  if (bar.total <= 32) barEl.querySelectorAll('i').forEach((s, i) => s.classList.toggle('on', i < bar.cur));
+  else barEl.querySelector('b').style.width = `${(bar.cur / bar.total) * 100}%`;
+}
 
 function fillRehearseSets() {
   const opts = state.show.sets.map((st, i) => `<option value="${i}">${escapeHtml(st.name)}</option>`).join('');
@@ -1274,7 +1323,7 @@ function renderRehearse() {
   $('rhCountSound').innerHTML = soundOpts(true); $('rhCountSound').value = rh.countSound;
   $('rhClickSound').innerHTML = soundOpts(false); $('rhClickSound').value = rh.clickSound;
   $('rhClickOn').checked = rh.clickOn; $('rhAccent').checked = rh.accentSets; $('rhVol').value = rh.volume;
-  $('rhRepeat').checked = rh.repeat; $('rhGap').value = rh.repeatGap; $('rhBig').checked = rh.bigDisplay; $('rhDelay').value = rh.delayMs;
+  $('rhRepeat').checked = rh.repeat; $('rhCountMode').value = rh.countMode || 'up'; $('rhBigPlay').checked = !!rh.bigInPlay; $('rhGap').value = rh.repeatGap; $('rhBig').checked = rh.bigDisplay; $('rhDelay').value = rh.delayMs;
   $('rhPct').value = rh.tempoPct; updatePctLabel();
   renderBeats();
 }
@@ -1318,6 +1367,8 @@ function wireRehearse() {
   $('rhRepeat').onchange = ev => { rh.repeat = ev.target.checked; saveRh(); };
   $('rhGap').onchange = ev => { rh.repeatGap = Math.max(1, Math.min(120, +ev.target.value || 8)); saveRh(); };
   $('rhBig').onchange = ev => { rh.bigDisplay = ev.target.checked; saveRh(); };
+  $('rhCountMode').onchange = ev => { rh.countMode = ev.target.value; saveRh(); };
+  $('rhBigPlay').onchange = ev => { rh.bigInPlay = ev.target.checked; saveRh(); };
   $('rhDelay').onchange = ev => { rh.delayMs = Math.max(0, Math.min(1000, +ev.target.value || 0)); saveRh(); };
   $('rhPreview').onclick = () => {
     const from = +$('rhFrom').value || 0, st = state.show.sets[Math.min(from + 1, state.show.sets.length - 1)];

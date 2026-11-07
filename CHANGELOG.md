@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.1 — 2026-11-07
+- Big count now shows the set's total ("5 /16"), or counts left if you prefer (Rehearse › Big count shows).
+- A bar with one segment per count fills as the move goes, with a small gap every 8 counts.
+- Last 4 counts of a move turn orange so the band sees the arrival coming; the box flashes on each new set.
+- Moves where nobody moves show as HOLD.
+- A line under the set says what's next ("Then 16 counts to set 7", "Then hold 8 on set 6", "Stop on set 8"); during the count-off it shows the first move.
+- Optional: show the big count during normal ▶ Play too.
+
 ## 0.5.0 — 2026-11-07
 - **Rehearse** (button on the bottom bar, or R): run reps from any set to any later set with a count-off, a click on every count, and the drill moving in time.
 - Count-off presets (default "1 · 3 · 1 2 3 4"), or tap the beats to make your own (silent / on / accent, 4 or 8 counts). Sounds: cowbell, click, woodblock, beep, or spoken numbers. "Hear count-off" to try it.

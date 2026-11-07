@@ -23,7 +23,8 @@ export const SOUNDS = {
 export const DEFAULT_SETTINGS = {
   preset: 'halfQuarter', beats: [...COUNTOFF_PRESETS.halfQuarter.beats],
   countSound: 'cowbell', clickOn: true, clickSound: 'click', accentSets: true,
-  volume: 0.8, tempoPct: 100, repeat: false, repeatGap: 8, delayMs: 0, bigDisplay: true
+  volume: 0.8, tempoPct: 100, repeat: false, repeatGap: 8, delayMs: 0, bigDisplay: true,
+  countMode: 'up', bigInPlay: false
 };
 
 // ---------- Sounds (synthesized, so they work offline with no files) ----------

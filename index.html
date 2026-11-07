@@ -62,7 +62,7 @@
   <section class="stage">
     <canvas id="field" tabindex="0" aria-label="Football field"></canvas>
     <div id="view3d" class="view3d" hidden></div>
-    <div id="bigCount" class="big-count" hidden><div class="bc-main"></div><div class="bc-sub"></div></div>
+    <div id="bigCount" class="big-count" hidden><div class="bc-main"><span class="bc-n"></span><span class="bc-of"></span></div><div class="bc-bar"></div><div class="bc-sub"></div><div class="bc-next"></div></div>
     <div class="hud">
       <span id="hudCoord"></span>
       <span id="hudHint"></span>
@@ -143,6 +143,8 @@
           <label class="chk"><input id="rhRepeat" type="checkbox"> Repeat automatically</label>
           <label>Seconds between reps <input id="rhGap" type="number" min="1" max="120"></label>
           <label class="chk"><input id="rhBig" type="checkbox"> Big count display</label>
+          <label>Big count shows <select id="rhCountMode"><option value="up">Count up (5 /16)</option><option value="down">Counts left (12 left)</option></select></label>
+          <label class="chk"><input id="rhBigPlay" type="checkbox"> Also show it during normal ▶ Play</label>
           <label>Speaker delay (ms) <input id="rhDelay" type="number" min="0" max="1000" step="10" title="Bluetooth speakers play late — raise this until the drill lines up with what you hear"></label>
         </div>
       </details>

@@ -128,11 +128,23 @@ select, input, textarea { background: var(--panel); border: 1px solid var(--line
 .rh-go { font-size: 16px; padding: 6px 18px; }
 details summary { cursor: pointer; font-weight: 600; margin: 6px 0; }
 .big-count { position: absolute; left: 50%; top: 44px; transform: translateX(-50%); text-align: center; pointer-events: none;
-  background: color-mix(in srgb, var(--panel) 80%, transparent); border: 1px solid var(--line); border-radius: 16px; padding: 4px 28px 8px; z-index: 2; }
+  background: color-mix(in srgb, var(--panel) 72%, transparent); border: 1px solid var(--line); border-radius: 14px; padding: 2px 20px 6px; z-index: 2; }
 .big-count[hidden] { display: none; }
-.big-count .bc-main { font-size: min(13vh, 120px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.big-count .bc-main { font-size: min(10vh, 92px); font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; justify-content: center; gap: 6px; }
+.big-count .bc-of { font-size: .38em; font-weight: 700; color: var(--muted); }
+.big-count .bc-bar { display: flex; gap: 2px; margin: 6px auto 4px; width: min(34vw, 300px); height: 8px; }
+.big-count .bc-bar i { flex: 1; border-radius: 2px; background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.big-count .bc-bar i.eight { margin-right: 4px; }
+.big-count .bc-bar i.on { background: var(--accent); }
+.big-count .bc-bar b { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.big-count .bc-next { font-size: min(2.4vh, 16px); color: var(--muted); }
+.big-count.arriving .bc-n { color: #e8a33d; }
+.big-count.arriving .bc-bar i.on { background: #e8a33d; }
+.big-count.hold .bc-n { color: var(--muted); }
+.big-count.hold .bc-sub { color: var(--select); }
+.big-count.arrive { box-shadow: 0 0 0 4px var(--accent); }
 .big-count .bc-sub { font-size: min(3vh, 22px); font-weight: 600; color: var(--muted); }
-.big-count.countoff .bc-main { color: var(--warn); }
+.big-count.countoff .bc-n { color: var(--warn); }
 .set-list .tempo-in { width: 52px; }
 #btnRehearse.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 
