@@ -242,3 +242,6 @@ body[data-mode="students"] .students-main { display: grid; grid-template-columns
   .students-side { border-left: 0; border-top: 1px solid var(--line); }
   .phone-wrap { height: 78vh; }
 }
+
+.stu-map-wrap { display: flex; flex-direction: column; gap: 4px; }
+#stuMap { width: 100%; height: 240px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; background: var(--bg); }

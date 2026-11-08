@@ -102,6 +102,7 @@ function ensureAtSet() {
 }
 function goToSet(i) {
   if (state.playing) pause();
+  state.replayHere = false;
   state.cur = Math.max(0, Math.min(state.show.sets.length - 1, i));
   state.count = setStarts(state.show)[state.cur];
   state.arcPts = [];
@@ -1099,7 +1100,8 @@ function play() {
   // so start from set N-1. Paused mid-move, it just continues.
   const starts = setStarts(state.show);
   const at = starts.findIndex(c => Math.abs(c - state.count) < 1e-6);
-  if (at > 0) { state.count = starts[at - 1]; state.cur = at - 1; }
+  if (at > 0 && !state.replayHere) { state.count = starts[at - 1]; state.cur = at - 1; }
+  state.replayHere = false;
   state.playing = true; lastT = performance.now();
   $('btnPlay').textContent = '⏸';
   raf = requestAnimationFrame(tick);
@@ -1119,6 +1121,7 @@ function tick(t) {
   const total = totalCounts(state.show);
   if (state.count >= total) { state.count = total; state.cur = state.show.sets.length - 1; pause(); return; }
   state.cur = locate(state.show, state.count).i;
+  state.lastMove = state.cur;
   updateTransport(); draw();
   if (rh.bigInPlay) renderBigCount({ phase: 'run', count: state.count, run: null });
   raf = requestAnimationFrame(tick);
@@ -1199,6 +1202,7 @@ function countAtX(clientX) {
 }
 function scrubTo(c) {
   if (state.playing) pause();
+  state.replayHere = false;
   if (dropLocked()) return;
   state.count = c;
   const st = setStarts(state.show);
@@ -1426,6 +1430,21 @@ function updatePctLabel() {
   const bpm = Math.round((st.bpm || state.show.tempo.bpm) * rh.tempoPct / 100);
   $('rhPctLabel').textContent = `${rh.tempoPct}% · ♩=${bpm}`;
 }
+// Stop = back to the start of the move that was playing, ready to play that same move again
+function stopPlayback() {
+  if (rehearsal.running) { pause(); if (rhRange) goToSet(rhRange.from); return; }
+  const wasPlaying = state.playing;
+  pause();
+  const L = locate(state.show, state.count);
+  const idx = L.frac > 0 ? L.i : (wasPlaying || state.lastMove != null ? (state.lastMove ?? state.cur) : state.cur);
+  state.cur = Math.max(0, Math.min(state.show.sets.length - 1, idx));
+  state.count = setStarts(state.show)[state.cur];
+  state.replayHere = state.cur < state.show.sets.length - 1; // next Play replays this move
+  state.lastMove = null;
+  $('bigCount').hidden = true;
+  renderSets(); renderDotInfo(); updateTransport(); draw();
+}
+
 // ---------------- App modes: Write · Rehearse · Students ----------------
 function setAppMode(mode) {
   if (mode === state.appMode) return;
@@ -1444,10 +1463,11 @@ function setAppMode(mode) {
     $('hudCoord').textContent = '';
   } else if (mode === 'students') {
     renderStudentsMode();
+    clearInterval(stuMapTimer); stuMapTimer = setInterval(drawStuMap, 200);
   } else {
     $('hudHint').textContent = state.mode === '3d' ? HINT_3D : (toolHints[state.tool] || '');
   }
-  if (mode !== 'students') $('studentFrame').src = 'about:blank'; // stop the preview's work while hidden
+  if (mode !== 'students') { $('studentFrame').src = 'about:blank'; clearInterval(stuMapTimer); } // stop the preview's work while hidden
   renderTimeline(); updateSelBar();
   requestAnimationFrame(() => { resize(); draw(); });
 }
@@ -1478,6 +1498,48 @@ function loadStudentFrame(pick) {
   $('studentFrame').src = `student.html?embed=1&preview=1&set=${state.cur}${pick ? '' : `&id=${encodeURIComponent(id)}`}&t=${Date.now()}`;
   sizePhone();
 }
+// mini field in Students mode: click a dot to preview that student
+let stuMapTimer = 0;
+const frameSV = () => { try { return $('studentFrame').contentWindow.__sv || null; } catch (e) { return null; } };
+function stuMapView() {
+  const c = $('stuMap'), r = c.getBoundingClientRect();
+  const s = Math.min((r.width - 8) / 196, (r.height - 8) / 96);
+  return { w: r.width, h: r.height, v: { scale: s, ox: r.width / 2, oy: r.height / 2 + (FIELD_DEPTH / 2) * s } };
+}
+function drawStuMap() {
+  const c = $('stuMap'); if (!c || state.appMode !== 'students') return;
+  const { w, h, v } = stuMapView(), dpr = window.devicePixelRatio || 1;
+  if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  drawFieldShared(g, v, state.show.field, w, h);
+  const sv = frameSV();
+  const count = sv && sv.show ? sv.count : setStarts(state.show)[state.cur];
+  const frame = positionsAt(state.show, Math.min(count, totalCounts(state.show)));
+  const me = sv && sv.me ? sv.me : $('stuWho').value;
+  for (const p of state.show.performers) {
+    const q = frame.pos[p.id]; if (!q) continue;
+    const X = v.ox + q.x * v.scale, Y = v.oy - q.y * v.scale, sec = sectionByKey(p.section);
+    g.beginPath(); g.arc(X, Y, p.id === me ? 5 : 3.2, 0, Math.PI * 2);
+    g.fillStyle = p.id === me ? css('--warn') : sec.color; g.fill();
+    if (p.id === me) { g.lineWidth = 2; g.strokeStyle = css('--ink'); g.stroke(); }
+  }
+}
+function stuMapHit(ev) {
+  const c = $('stuMap'), r = c.getBoundingClientRect(), { v } = stuMapView();
+  const x = (ev.clientX - r.left - v.ox) / v.scale, y = (v.oy - (ev.clientY - r.top)) / v.scale;
+  const sv = frameSV();
+  const frame = positionsAt(state.show, sv && sv.show ? Math.min(sv.count, totalCounts(state.show)) : setStarts(state.show)[state.cur]);
+  let best = null, bd = 4;
+  for (const p of state.show.performers) { const q = frame.pos[p.id]; const d = Math.hypot(q.x - x, q.y - y); if (d < bd) { bd = d; best = p; } }
+  return best;
+}
+function previewStudent(id) {
+  $('stuWho').value = id;
+  let w = null; try { w = $('studentFrame').contentWindow; } catch (e) {}
+  if (w && typeof w.__svPick === 'function') { w.__svPick(id); drawStuMap(); }
+  else loadStudentFrame();
+}
+
 function sizePhone() {
   const [w, h] = $('stuDevice').value.split('x').map(Number);
   const phone = $('phone'), wrap = $('phoneWrap');
@@ -1592,7 +1654,9 @@ function init() {
   $('sbDrop').onclick = startDrop;
   $('sbPreview').onclick = () => openStudentView();
   document.querySelectorAll('.modes button').forEach(b => b.onclick = () => setAppMode(b.dataset.mode));
-  $('stuWho').onchange = () => loadStudentFrame();
+  $('stuWho').onchange = () => previewStudent($('stuWho').value);
+  $('stuMap').addEventListener('click', ev => { const p = stuMapHit(ev); if (p) previewStudent(p.id); });
+  $('stuMap').addEventListener('mousemove', ev => { const p = stuMapHit(ev); $('stuMap').title = p ? `${p.label} — click to preview` : ''; });
   $('stuDevice').onchange = sizePhone;
   $('stuOpen').onclick = () => openStudentView($('stuWho').value);
   $('stuPick').onclick = () => loadStudentFrame(true);
@@ -1618,6 +1682,7 @@ function init() {
   };
 
   $('btnPlay').onclick = () => state.playing ? pause() : play();
+  $('btnStop').onclick = stopPlayback;
   $('btnPrevSet').onclick = () => goToSet(atSet() ? state.cur - 1 : state.cur);
   $('btnNextSet').onclick = () => goToSet(state.cur + 1);
   $('scrub').oninput = ev => {
@@ -1644,6 +1709,7 @@ function init() {
     if (k === ' ') { e.preventDefault(); if (rehearseOpen()) { rehearsal.running ? pause() : startRehearsal(); } else state.playing ? pause() : play(); return; }
     if (k.toLowerCase() === 'r' && !e.shiftKey) { toggleRehearse(); return; }
     if (state.appMode !== 'write') { if (k === 'Escape' && state.appMode === 'students') setAppMode('write'); return; }
+    if (k === 'Escape' && (state.playing || rehearsal.running)) { stopPlayback(); return; }
     if (k === 'Escape') { state.arcPts = []; state.sel.clear(); state.selProp = null; setTool('select'); selectionChanged(); return; }
     const step = e.shiftKey ? 4 : 1;
     if (k === 'ArrowLeft') { e.preventDefault(); nudge(-step, 0); return; }

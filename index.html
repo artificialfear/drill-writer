@@ -214,6 +214,10 @@
           <option value="390x844">iPhone (390 × 844)</option><option value="412x915">Android (412 × 915)</option>
           <option value="375x667">Small phone (375 × 667)</option><option value="768x1024">Tablet (768 × 1024)</option></select></label>
       </div>
+      <div class="stu-map-wrap">
+        <canvas id="stuMap" aria-label="Click a dot to preview that student"></canvas>
+        <p class="help">Click any dot to see that student's phone.</p>
+      </div>
       <div class="row"><button id="stuOpen">Open in a new tab</button><button id="stuPick">Show the ID picker</button></div>
       <div class="publish-soon">
         <h4>Publish for students <span class="soon">coming next</span></h4>
@@ -234,6 +238,7 @@
   <div class="tp-row">
   <button id="btnPrevSet" title="Previous set (,)">⏮</button>
   <button id="btnPlay" class="play" title="Play / pause (Space)">▶</button>
+  <button id="btnStop" title="Stop: back to the start of the move that was playing (Esc)">■</button>
   <button id="btnNextSet" title="Next set (.)">⏭</button>
   <input id="scrub" class="sr-only" type="range" min="0" max="0" step="0.01" value="0" aria-label="Timeline position">
   <span id="countReadout" class="readout">Set 1</span>

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1 — 2026-11-07
+- **Students mode**: a small field map in the side panel. Click any dot to see that student's phone (the dropdown still works). The previewed student is the red dot, and the map follows the phone's set while it plays.
+- **Stop button (■)** next to Play, in the editor and on the student phone. Stop goes back to the start of the move that was playing, and the next Play replays that same move — handy for watching one move over and over. Esc also stops in the editor. In Practice / Rehearse, Stop returns to the From set.
+
 ## 0.9.0 — 2026-11-07
 - **Write · Rehearse · Students** modes in the top bar.
   - **Write** is the editor, as before.

@@ -124,6 +124,7 @@ select, input { background: var(--panel); border: 1px solid var(--line); border-
 .controls { position: fixed; left: 0; right: 0; bottom: 0; display: flex; gap: 8px; align-items: center; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line); z-index: 10; }
 .controls .primary { flex: 1; font-size: 18px; }
 .clock { font-variant-numeric: tabular-nums; font-size: 13px; min-width: 70px; text-align: right; }
+.controls .stop { min-width: 52px; font-size: 18px; }
 
 dialog { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--ink); width: min(92vw, 420px); }
 dialog::backdrop { background: rgba(0,0,0,.45); }

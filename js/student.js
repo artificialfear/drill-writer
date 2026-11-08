@@ -225,6 +225,7 @@ function draw() {
 // ---------- navigation ----------
 function goSet(i) {
   stopAll();
+  st.replay = false;
   st.cur = Math.max(0, Math.min(st.show.sets.length - 1, i));
   st.count = setStarts(st.show)[st.cur];
   $('bigCount').hidden = true;
@@ -285,7 +286,8 @@ function play() {
   // on set N, play the move into set N (start from set N-1); mid-move, continue
   const starts = setStarts(st.show);
   const at = starts.findIndex(c => Math.abs(c - st.count) < 1e-6);
-  if (at > 0) { st.count = starts[at - 1]; st.cur = at - 1; render(); }
+  if (at > 0 && !st.replay) { st.count = starts[at - 1]; st.cur = at - 1; render(); }
+  st.replay = false;
   st.playing = true; $('playBtn').textContent = '⏸ Pause'; lastT = performance.now();
   raf = requestAnimationFrame(tick);
 }
@@ -297,6 +299,7 @@ function tick(t) {
   const total = totalCounts(st.show);
   if (st.count >= total) { st.count = total; st.cur = st.show.sets.length - 1; stopAll(); render(); return; }
   const c = locate(st.show, st.count).i;
+  st.lastMove = c;
   if (c !== st.cur) { st.cur = c; render(); }
   renderBigCount({ phase: 'run', count: st.count, run: null });
   updateClock(); draw();
@@ -306,6 +309,22 @@ function stopAll() {
   if (rehearsal && rehearsal.running) rehearsal.stop();
   st.playing = false; cancelAnimationFrame(raf);
   $('playBtn').textContent = '▶ Play';
+}
+
+// Stop = back to the start of the move that was playing; the next Play replays that move
+let practiceFrom = null;
+function stopToStart() {
+  const practicing = rehearsal && rehearsal.running;
+  const wasPlaying = st.playing;
+  stopAll();
+  const L = locate(st.show, st.count);
+  let idx = practicing && practiceFrom != null ? practiceFrom : (L.frac > 0 ? L.i : (wasPlaying || st.lastMove != null ? (st.lastMove ?? st.cur) : st.cur));
+  idx = Math.max(0, Math.min(st.show.sets.length - 1, idx));
+  st.cur = idx; st.count = setStarts(st.show)[idx];
+  st.replay = idx < st.show.sets.length - 1 && !practicing;
+  st.lastMove = null;
+  $('bigCount').hidden = true;
+  render();
 }
 
 // ---------- practice (count-off + click) ----------
@@ -342,7 +361,7 @@ function goPractice() {
   const from = +$('pFrom').value, to = +$('pTo').value;
   if (!(to > from)) return toast('“To” has to be a later set.');
   const s = settings();
-  st.cur = from; st.count = setStarts(st.show)[from];
+  st.cur = from; st.count = setStarts(st.show)[from]; practiceFrom = from;
   rehearsal.start({ from, to, beats: s.beats, countSound: s.countSound, clickOn: s.clickOn, clickSound: s.clickSound, accentSets: s.accentSets,
     volume: s.volume, tempoPct: +$('pPct').value, repeat: $('pRepeat').checked, repeatGap: s.repeatGap, delayMs: s.delayMs });
 }
@@ -385,6 +404,8 @@ function wire() {
   $('nextSet').onclick = () => goSet(st.cur + 1);
   $('playBtn').onclick = () => st.playing ? (stopAll(), render()) : play();
   $('practiceBtn').onclick = openPractice;
+  $('stopBtn').onclick = stopToStart;
+  window.__svPick = id => { if (st.show && st.show.performers.some(p => p.id === id)) pickMe(id); };
   $('pFrom').onchange = updatePct; $('pPct').oninput = updatePct;
   $('practiceDlg').addEventListener('close', () => { if ($('practiceDlg').returnValue === 'go') goPractice(); });
   $('zoomMe').onclick = () => { st.zoom = 'me'; $('zoomMe').classList.add('on'); $('zoomAll').classList.remove('on'); draw(); };

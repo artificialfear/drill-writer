@@ -84,6 +84,10 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Students: `iframe#studentFrame` → `student.html?embed=1&preview=1&id=…&set=…` (embed hides the preview banner). Live updates use the same localStorage `storage` event. Frame is sized to the chosen device and CSS-scaled to fit (`sizePhone`). The frame is blanked when leaving Students.
 - Publish button is a disabled placeholder until session 3.
 
+## Stop
+- `stopPlayback()` (editor) / `stopToStart()` (student): back to the start of the move that was playing (`lastMove` recorded during play) and set `replayHere`/`replay` so the next Play skips the "play the move INTO this set" rewind once. Cleared by goToSet/goSet/scrub.
+- Students mode map: `#stuMap` redrawn every 200 ms while in Students mode, reading the iframe's `__sv` state (same origin); click → `contentWindow.__svPick(id)` (keeps the set), falling back to reloading the frame.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):
