@@ -68,6 +68,13 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - `create3D(...).lookFrom(pos, target)` exists for tests/screens.
 - Mat chose these section defaults (2026-11-07). When facings are added, "torso to the box" becomes "torso to the set's facing".
 
+## UI (v0.8)
+- Timeline (`renderTimeline`/`updatePlayhead`/`wireTimeline` in app.js): blocks use flex-grow = counts; track width ≈ 6 px per count (scrolls on long shows). Press without moving = goToSet, drag = scrub (`countAtX`), `.tl-edge` drag = change counts (one undo step). The old range input `#scrub` is kept visually hidden for keyboard/tests.
+- Selection bar `#selBar` (`updateSelBar`, called at the end of `draw()` and on 2D/3D switch): hidden while dragging, playing, in 3D or during a drop review. Placed above the selection, else below, else pinned to the top — whichever doesn't cover other dots. Holds `#optInterval`/`#optCols` now.
+- Quick select `#quickSel` (`renderQuickSel`, from `renderPerformers`).
+- CSS gotcha: elements with `display:flex` need an explicit `[hidden]{display:none}` rule.
+- Mat's agreed next UI steps after Emily's hands-on session: Write/Rehearse/Students modes, undo toasts instead of confirm(), save status, new-show wizard, "?" shortcut sheet, onion skin of next set.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):

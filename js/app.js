@@ -214,6 +214,7 @@ function draw() {
   }
 
   drawDropPreview(editing);
+  updateSelBar();
   drawToolPreview();
 }
 
@@ -484,6 +485,7 @@ async function setMode(mode) {
   $('hudCoord').textContent = '';
   if (on3) { if (state.tool !== 'select') setTool('select'); state.v3.show(); }
   else if (state.v3) state.v3.hide();
+  updateSelBar();
   $('hudHint').textContent = on3 ? HINT_3D : (toolHints[state.tool] || '');
   try { localStorage.setItem(VIEW_KEY, mode); } catch (e) {}
   draw();
@@ -625,6 +627,7 @@ function transitionWarnings(i) {
 }
 
 function renderSets() {
+  renderTimeline();
   const list = $('setList'); list.innerHTML = '';
   const starts = setStarts(state.show);
   state.show.sets.forEach((st, i) => {
@@ -649,6 +652,7 @@ function renderSets() {
 }
 
 function renderPerformers() {
+  renderQuickSel();
   const box = $('perfList'); box.innerHTML = '';
   for (const sec of SECTIONS) {
     const ps = state.show.performers.filter(p => p.section === sec.key);
@@ -1123,6 +1127,159 @@ function updateTransport() {
   }
   $('countReadout').textContent = txt;
   $('btnUndo').disabled = !state.undo.length; $('btnRedo').disabled = !state.redo.length;
+  updatePlayhead();
+}
+
+// ---------------- Set timeline ----------------
+// One block per set, sized by its counts (set 1 is a small "start" block). Click = go to that set,
+// drag = scrub, drag a block's right edge = change that set's counts.
+function renderTimeline() {
+  const track = $('tlTrack'); if (!track) return;
+  const sets = state.show.sets;
+  const L = locate(state.show, state.count), sitting = L.frac === 0;
+  let html = '';
+  sets.forEach((st, i) => {
+    const warn = transitionWarnings(i) > 0;
+    const hold = i > 0 && state.show.performers.length && state.show.performers.every(p => {
+      const a = sets[i - 1].pos[p.id], b = st.pos[p.id]; return Math.hypot(a.x - b.x, a.y - b.y) < 0.01; });
+    const cls = ['tl-block', i === 0 ? 'start' : '', (sitting ? i === state.cur : i === L.i + 1) ? 'current' : '', (!sitting && i === L.i) ? 'next' : '',
+      warn ? 'warn' : '', st.note ? 'note' : '', hold ? 'hold' : ''].filter(Boolean).join(' ');
+    const style = i === 0 ? '' : ` style="flex-grow:${Math.max(1, st.counts)}"`;
+    const title = i === 0 ? `Set ${st.name} · start` : `Set ${st.name} · ${st.counts} counts${warn ? ' · big steps!' : ''}${st.note ? ' · ' + st.note : ''} — drag the right edge to change counts`;
+    html += `<div class="${cls}" data-i="${i}"${style} title="${escapeHtml(title)}"><span class="tl-name">${escapeHtml(st.name)}</span>`
+      + (i === 0 ? '' : `<span class="tl-cts">${st.counts}</span><span class="tl-edge" data-edge="${i}"></span>`) + '</div>';
+  });
+  track.innerHTML = html + '<div class="tl-head" id="tlHead"></div>';
+  // keep blocks readable on long shows: about 6 px per count, at least the visible width
+  const total = Math.max(1, totalCounts(state.show));
+  track.style.width = `max(100%, ${34 + total * 6 + sets.length * 2}px)`;
+  updatePlayhead();
+}
+function blockEl(i) { return $('tlTrack').querySelector(`.tl-block[data-i="${i}"]`); }
+function updatePlayhead() {
+  const head = $('tlHead'); if (!head) return;
+  const L = locate(state.show, state.count);
+  let x;
+  if (L.frac === 0) { const b = blockEl(L.i); x = b ? b.offsetLeft + b.offsetWidth - 1 : 0; }
+  else { const b = blockEl(L.i + 1); x = b ? b.offsetLeft + L.frac * b.offsetWidth : 0; }
+  head.style.left = `${x}px`;
+  // keep the playhead in view while playing
+  const tl = $('timeline');
+  if (state.playing && (x < tl.scrollLeft + 20 || x > tl.scrollLeft + tl.clientWidth - 20)) tl.scrollLeft = x - tl.clientWidth / 2;
+  // re-highlight blocks cheaply
+  const sitting = L.frac === 0;
+  $('tlTrack').querySelectorAll('.tl-block').forEach(b => {
+    const i = +b.dataset.i;
+    b.classList.toggle('current', sitting ? i === state.cur : i === L.i + 1);
+    b.classList.toggle('next', !sitting && i === L.i);
+  });
+}
+function countAtX(clientX) {
+  const track = $('tlTrack'), r = track.getBoundingClientRect(), x = clientX - r.left;
+  const starts = setStarts(state.show);
+  for (const b of track.querySelectorAll('.tl-block')) {
+    const i = +b.dataset.i;
+    if (x <= b.offsetLeft + b.offsetWidth) {
+      if (i === 0) return 0;
+      const f = Math.max(0, Math.min(1, (x - b.offsetLeft) / b.offsetWidth));
+      return starts[i - 1] + f * state.show.sets[i].counts;
+    }
+  }
+  return totalCounts(state.show);
+}
+function scrubTo(c) {
+  if (state.playing) pause();
+  if (dropLocked()) return;
+  state.count = c;
+  const st = setStarts(state.show);
+  state.cur = locate(state.show, c).i;
+  st.forEach((v, i) => { if (Math.abs(c - v) < 0.25) { state.count = v; state.cur = i; } });
+  updateTransport(); renderDotInfo(); draw();
+}
+function wireTimeline() {
+  const track = $('tlTrack');
+  let g = null;
+  track.addEventListener('pointerdown', e => {
+    track.setPointerCapture(e.pointerId);
+    const edge = e.target.closest('.tl-edge');
+    if (edge) {
+      if (dropLocked()) return toast('Finish or cancel the drop first.');
+      const i = +edge.dataset.edge, b = blockEl(i), st = state.show.sets[i];
+      g = { kind: 'edge', i, x0: e.clientX, c0: st.counts, pxPer: b.offsetWidth / Math.max(1, st.counts), edge, changed: false };
+      edge.classList.add('drag');
+      return;
+    }
+    const blk = e.target.closest('.tl-block');
+    g = { kind: 'press', x0: e.clientX, i: blk ? +blk.dataset.i : null };
+  });
+  track.addEventListener('pointermove', e => {
+    if (!g) return;
+    if (g.kind === 'edge') {
+      const c = Math.max(1, Math.round(g.c0 + (e.clientX - g.x0) / g.pxPer));
+      const st = state.show.sets[g.i];
+      if (c !== st.counts) {
+        if (!g.changed) { pushUndo(); g.changed = true; }
+        st.counts = c;
+        state.count = setStarts(state.show)[state.cur];
+        const b = blockEl(g.i); b.style.flexGrow = c; b.querySelector('.tl-cts').textContent = c;
+        $('countReadout').textContent = `Set ${st.name}: ${c} counts`;
+        draw();
+      }
+      return;
+    }
+    if (g.kind === 'press' && Math.abs(e.clientX - g.x0) > 4) g.kind = 'scrub';
+    if (g.kind === 'scrub') scrubTo(countAtX(e.clientX));
+  });
+  const end = () => {
+    if (!g) return;
+    if (g.kind === 'edge') { g.edge.classList.remove('drag'); if (g.changed) changed(); }
+    else if (g.kind === 'press' && g.i != null) goToSet(g.i);
+    else if (g.kind === 'scrub') { renderSets(); }
+    g = null;
+  };
+  track.addEventListener('pointerup', end);
+  track.addEventListener('pointercancel', end);
+  $('tlAdd').onclick = addSet;
+  window.addEventListener('resize', updatePlayhead);
+}
+
+// ---------------- Floating selection bar ----------------
+function updateSelBar() {
+  const bar = $('selBar'), qs = $('quickSel');
+  if (!bar) return;
+  const g = state.pointer;
+  const busy = state.mode === '3d' || state.playing || dropLocked() || (g && ['drag', 'marquee', 'line', 'pan', 'pinch'].includes(g.kind));
+  const ids = selIds();
+  qs.hidden = state.mode === '3d' || state.playing || !!ids.length || !state.show.performers.length || dropLocked();
+  if (busy || !ids.length) { bar.hidden = true; return; }
+  bar.hidden = false;
+  $('selCount').textContent = ids.length === 1 ? (state.show.performers.find(p => p.id === ids[0]) || {}).label : `${ids.length} selected`;
+  bar.querySelector('.sb-one').hidden = ids.length !== 1;
+  // place it just above the selection (or below if there's no room), kept inside the field area
+  const snap = positionsAt(state.show, state.count);
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const id of ids) { const q = snap.pos[id]; const X = sx(q.x), Y = sy(q.y); x0 = Math.min(x0, X); x1 = Math.max(x1, X); y0 = Math.min(y0, Y); y1 = Math.max(y1, Y); }
+  const bw = bar.offsetWidth, bh = bar.offsetHeight, pad = 8;
+  const left = Math.max(pad, Math.min(W - bw - pad, (x0 + x1) / 2 - bw / 2));
+  // try just above the selection, then just below; skip any spot that would hide other dots;
+  // otherwise pin it to the top of the field area
+  const others = state.show.performers.filter(p => !state.sel.has(p.id)).map(p => ({ X: sx(snap.pos[p.id].x), Y: sy(snap.pos[p.id].y) }));
+  const fits = t => t >= 44 && t + bh <= H - pad && !others.some(o => o.X > left - 6 && o.X < left + bw + 6 && o.Y > t - 6 && o.Y < t + bh + 6);
+  const above = y0 - bh - 22, below = y1 + 22;
+  const top = fits(above) ? above : fits(below) ? below : 44;
+  bar.style.left = `${left}px`; bar.style.top = `${top}px`;
+}
+function renderQuickSel() {
+  const qs = $('quickSel'); if (!qs) return;
+  const present = SECTIONS.filter(sec => state.show.performers.some(p => p.section === sec.key));
+  qs.innerHTML = '<span class="help">Select:</span>' + present.map(sec =>
+    `<button data-sec="${sec.key}" title="Select all ${sec.name} (Shift adds)"><span class="swatch" style="background:${sec.color}"></span>${sec.name}</button>`).join('')
+    + (present.length > 1 ? '<button data-sec="*">Everyone</button>' : '');
+  qs.querySelectorAll('button').forEach(b => b.onclick = ev => {
+    if (!(ev.shiftKey || ev.ctrlKey || ev.metaKey)) { state.sel.clear(); state.selProp = null; }
+    state.show.performers.filter(p => b.dataset.sec === '*' || p.section === b.dataset.sec).forEach(p => state.sel.add(p.id));
+    selectionChanged();
+  });
 }
 
 // ---------------- Rehearsal mode ----------------
@@ -1372,6 +1529,9 @@ function init() {
   $('btnDropPerf').onclick = startDrop;
   $('btnAddStudent').onclick = startAdd;
   wireRehearse();
+  wireTimeline();
+  $('sbDrop').onclick = startDrop;
+  $('sbPreview').onclick = () => openStudentView();
   $('btnStudent').onclick = () => openStudentView();
   $('btnRenumber').onclick = renumber;
   $('btnAddProp').onclick = () => addProp($('addPropKind').value);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0 — 2026-11-07
+- **Set timeline** across the bottom: one block per set, sized by its counts, with a red playhead. Click a block to go to that set, drag along it to scrub, drag a block's right edge to change its counts (undoable). A red dot marks sets with steps bigger than 6 to 5, ✎ marks sets with notes, "hold" marks sets where nobody moves. **+ Set** adds a set after the current one.
+- **Selection bar**: select dots and their tools appear right next to them — Line, Arc, Block, Circle, interval and block columns, rotate, expand/contract, flip, mirror across the 50, reverse, copy previous spots, and (for one student) Drop… and Preview. It moves out of the way of other dots.
+- **Quick select**: with nothing selected, section buttons along the bottom of the field select a whole section (Shift adds) or Everyone.
+- Undo / Redo moved to the top bar. The left toolbar is now just the tools and Snap.
+
 ## 0.7.0 — 2026-11-07
 - 3D marchers now show marching technique. Winds keep their upper body and horn to the box while their hips, legs and feet turn toward the next dot (slides). Moving backward, the hips face away from travel and they step back (backward march / backward slide). Battery keeps drums to the box and crab steps sideways. Guard and drum major turn their whole body toward where they're going. Holds stand still.
 - The student view names the technique for every move ("Slide right", "Forward slide left", "Backward march", "Crab step left"…) next to the step size, in "Next:", and on the dot sheet. Left/right are the marcher's, facing the box.

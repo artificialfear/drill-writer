@@ -12,6 +12,9 @@
   <div class="brand">Drill Writer</div>
   <input id="showTitle" class="title-input" aria-label="Show title" value="Untitled Show">
   <div class="top-actions">
+    <button id="btnUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶ Undo</button>
+    <button id="btnRedo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
+    <span class="top-sep"></span>
     <button id="btnNew" title="Start a new show">New</button>
     <button id="btnOpen" title="Open a saved show file (.json)">Open</button>
     <button id="btnSave" title="Download this show as a file">Save</button>
@@ -34,36 +37,53 @@
       <button class="tool" data-tool="pan" title="Pan the view (H) — or drag with the right mouse button">Pan</button>
     </div>
     <div class="tool-group opts">
-      <label>Interval <select id="optInterval">
-        <option value="0">Fit</option><option value="1">1</option><option value="1.5">1.5</option>
-        <option value="2" selected>2</option><option value="2.5">2.5</option><option value="3">3</option>
-        <option value="4">4</option><option value="6">6</option><option value="8">8</option>
-      </select></label>
-      <label>Block cols <input id="optCols" type="number" min="1" max="40" value="6"></label>
       <label>Snap <select id="optSnap">
         <option value="1">1 step</option><option value="0.5" selected>½ step</option>
         <option value="0.25">¼ step</option><option value="0">Off</option>
       </select></label>
     </div>
-    <div class="tool-group transforms">
-      <span class="group-label">Selection</span>
-      <button data-act="rotL" title="Rotate 15° left">⟲ 15°</button>
-      <button data-act="rotR" title="Rotate 15° right">⟳ 15°</button>
-      <button data-act="rot90" title="Rotate 90°">⟳ 90°</button>
-      <button data-act="expand" title="Expand from center">Expand</button>
-      <button data-act="contract" title="Contract toward center">Contract</button>
-      <button data-act="flipH" title="Flip left/right">Flip ↔</button>
-      <button data-act="flipV" title="Flip front/back">Flip ↕</button>
-      <button data-act="mirror50" title="Mirror across the 50">Mirror 50</button>
-      <button data-act="reverse" title="Reverse order: swap dots end-to-end">Reverse</button>
-      <button data-act="prevSet" title="Copy these performers' spots from the previous set">← Prev spots</button>
-    </div>
+    <p class="help tool-tip">Select dots first — their tools pop up right next to them.</p>
   </nav>
 
   <section class="stage">
     <canvas id="field" tabindex="0" aria-label="Football field"></canvas>
     <div id="view3d" class="view3d" hidden></div>
     <div id="bigCount" class="big-count" hidden><div class="bc-main"><span class="bc-n"></span><span class="bc-of"></span></div><div class="bc-bar"></div><div class="bc-sub"></div><div class="bc-next"></div></div>
+    <!-- appears next to the selected dots -->
+    <div id="selBar" class="sel-bar" hidden>
+      <span id="selCount" class="sb-count"></span>
+      <span class="sb-group">
+        <button class="tool sb-tool" data-tool="line" title="Line (L): drag across the field">╱ Line</button>
+        <button class="tool sb-tool" data-tool="arc" title="Arc (A): click start, end, then the bulge">◠ Arc</button>
+        <button class="tool sb-tool" data-tool="block" title="Block (B): click the front-left corner">▦ Block</button>
+        <button class="tool sb-tool" data-tool="circle" title="Circle (C): click the center">◯ Circle</button>
+      </span>
+      <label class="sb-opt" title="Spacing between dots for Line, Block and Circle">Interval
+        <select id="optInterval">
+          <option value="0">Fit</option><option value="1">1</option><option value="1.5">1.5</option>
+          <option value="2" selected>2</option><option value="2.5">2.5</option><option value="3">3</option>
+          <option value="4">4</option><option value="6">6</option><option value="8">8</option>
+        </select></label>
+      <label class="sb-opt" title="Columns for Block">Cols <input id="optCols" type="number" min="1" max="40" value="6"></label>
+      <span class="sb-group">
+        <button data-act="rotL" title="Rotate 15° left">⟲</button>
+        <button data-act="rotR" title="Rotate 15° right">⟳</button>
+        <button data-act="rot90" title="Rotate 90°">⟳90</button>
+        <button data-act="expand" title="Expand from center">⤢</button>
+        <button data-act="contract" title="Contract toward center">⤡</button>
+        <button data-act="flipH" title="Flip left/right">⇆</button>
+        <button data-act="flipV" title="Flip front/back">⇅</button>
+        <button data-act="mirror50" title="Mirror across the 50">|50|</button>
+        <button data-act="reverse" title="Reverse order: swap dots end-to-end">Rev</button>
+        <button data-act="prevSet" title="Copy these performers' spots from the previous set">← Prev</button>
+      </span>
+      <span class="sb-group sb-one">
+        <button id="sbDrop" title="This student quit: remove their dot and close up their forms">Drop…</button>
+        <button id="sbPreview" title="See this student's phone view">Preview</button>
+      </span>
+    </div>
+    <div id="quickSel" class="quick-sel" hidden><span class="help">Select:</span></div>
+
     <div class="hud">
       <span id="hudCoord"></span>
       <span id="hudHint"></span>
@@ -180,17 +200,23 @@
 </main>
 
 <footer class="transport">
+  <div class="tl-row">
+    <div id="timeline" class="timeline" aria-label="Sets timeline: click a set to go there, drag to scrub, drag a set's right edge to change its counts">
+      <div class="tl-track" id="tlTrack"></div>
+    </div>
+    <button id="tlAdd" class="tl-add" title="Add a set after the current one">+ Set</button>
+  </div>
+  <div class="tp-row">
   <button id="btnPrevSet" title="Previous set (,)">⏮</button>
   <button id="btnPlay" class="play" title="Play / pause (Space)">▶</button>
   <button id="btnNextSet" title="Next set (.)">⏭</button>
-  <input id="scrub" type="range" min="0" max="0" step="0.01" value="0" aria-label="Timeline">
+  <input id="scrub" class="sr-only" type="range" min="0" max="0" step="0.01" value="0" aria-label="Timeline position">
   <span id="countReadout" class="readout">Set 1</span>
   <label class="bpm">Tempo <input id="bpm" type="number" min="40" max="240" value="144"></label>
   <button id="btnRehearse" title="Run reps with a count-off and click track (R)">Rehearse</button>
   <label class="chk"><input id="optGhost" type="checkbox" checked> Paths</label>
   <label class="chk"><input id="optLabels" type="checkbox" checked> Labels</label>
-  <button id="btnUndo" title="Undo (Ctrl+Z)">↶</button>
-  <button id="btnRedo" title="Redo (Ctrl+Y)">↷</button>
+  </div>
 </footer>
 
 <div id="toast" class="toast" role="status"></div>
