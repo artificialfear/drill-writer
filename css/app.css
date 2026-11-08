@@ -259,3 +259,12 @@ body[data-mode="students"] .students-main { display: grid; grid-template-columns
 .prob-list li.prob:hover { background: var(--hover); }
 .prob-list li.x { border-left: 3px solid var(--warn); }
 .prob-list li.big { border-left: 3px solid #e8a33d; }
+
+.prob-list li.prob { display: flex; gap: 6px; align-items: flex-start; justify-content: space-between; }
+.prob-t { flex: 1; min-width: 0; }
+.prob-b { display: flex; gap: 3px; flex: none; }
+.prob-b button { min-height: 24px; padding: 1px 6px; font-size: 11px; }
+.prob-list li.ok { opacity: .6; border-left-color: var(--accent); }
+.prob-sep { margin-top: 6px; font-weight: 600; }
+#fixAll { margin: 4px 0; }
+.drop-sets li span:not(.what) { font-size: 12px; color: var(--muted); }

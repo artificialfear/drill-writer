@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.12.0 — 2026-11-08
+- **Fix… (swap spots).** Every item in the Problems list has a Fix… button, and **Fix all I can…** sits at the top. The app keeps every dot of the set exactly where it is and works out which students of the same instrument should trade spots so the largest step is as small as possible and nobody's path crosses. Each student takes the other's path for the rest of the show, so every later move looks the same — only the move into that set changes.
+  - Review before applying: each set lists who trades and how many problems it fixes; the field zooms in and shows old paths (red dashed) and new paths (green).
+  - Afterward, a report lists exactly whose dot sheets changed and from which set (Copy list). One undo reverses it.
+  - If swapping can't help (usually two different instruments crossing), it says so.
+- **OK** on any problem marks it as intentional: it stops showing on the timeline, sets list, field and student phones, and moves to a "Marked OK" list where **Undo OK** brings it back. Saved with the show.
+
 ## 0.11.1 — 2026-11-08
 - Play and Space now start **from the set you're on** and run forward — in Write, 3D, the student phone and the Students preview. Paused partway through a move, they continue from there. On the last set (nothing ahead), they play the final move into it. Stop returns to the set the move started from.
 

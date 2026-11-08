@@ -4,7 +4,7 @@ Run from the repo root:  python3 tests/smoke.py [--shots DIR]
 Starts a local server, loads the app in Chromium, exercises the main features,
 and saves screenshots. Exits non-zero on any failure.
 """
-import http.server, socketserver, threading, sys, os, functools, json
+import json, http.server, socketserver, threading, sys, os, functools, json
 
 from playwright.sync_api import sync_playwright
 
@@ -203,6 +203,35 @@ with sync_playwright() as p:
     page.screenshot(path=f'{SHOTS}/18-collision-moment.png')
     page.locator('#tlTrack .tl-block').nth(1).click(); page.wait_for_timeout(150)
     page.screenshot(path=f'{SHOTS}/19-collision-set.png')
+
+    # mark OK / undo OK
+    page.click('#problems li.x >> nth=0 >> button[data-a=ok]')
+    check('OK hides a flagged collision', page.locator('#problems li.x:not(.ok)').count() == 1 and page.locator('#problems li.ok').count() == 1)
+    page.click('#problems li.ok button[data-a=unok]')
+    check('Undo OK flags it again', page.locator('#problems li.x:not(.ok)').count() == 2)
+    page.click('#problems li.x >> nth=0 >> button[data-a=fix]')
+    check('Fix explains when swapping cannot help (two instruments)', 'can' in page.inner_text('#toast').lower())
+
+    # auto-fix: six trumpets whose paths all cross
+    import tempfile
+    cross = {'app': 'drill-writer', 'version': 1, 'title': 'Cross test', 'field': {'hash': 'hs'}, 'performers': [], 'props': [], 'tempo': {'bpm': 144},
+             'sets': [{'id': 'a', 'name': '1', 'counts': 0, 'pos': {}, 'props': {}}, {'id': 'b', 'name': '2', 'counts': 8, 'pos': {}, 'props': {}}, {'id': 'c', 'name': '3', 'counts': 8, 'pos': {}, 'props': {}}]}
+    for k in range(6):
+        pid = f't{k}'; cross['performers'].append({'id': pid, 'label': f'T{k+1}', 'section': 'trumpet'})
+        cross['sets'][0]['pos'][pid] = {'x': k * 2, 'y': 30}; cross['sets'][1]['pos'][pid] = {'x': 10 - k * 2, 'y': 34}; cross['sets'][2]['pos'][pid] = {'x': 10 - k * 2, 'y': 40}
+    tf = tempfile.NamedTemporaryFile('w', suffix='.json', delete=False); json.dump(cross, tf); tf.close()
+    page.set_input_files('#fileInput', tf.name); page.wait_for_function("__dw.show.title === 'Cross test'")
+    page.click('.tab[data-tab=sets]')
+    check('crossing paths are flagged', page.locator('#problems li.x').count() > 5)
+    page.click('#fixAll'); page.wait_for_selector('#fixApply')
+    page.screenshot(path=f'{SHOTS}/20-fix-review.png')
+    page.click('#fixApply'); page.wait_for_selector('#fixDone')
+    check('swap fix clears every problem', page.evaluate('__dw.show.sets[1] && document.querySelectorAll("#problems li.prob:not(.ok)").length') == 0)
+    check('fix report lists the swapped students', page.locator('.report-list li').count() == 6)
+    page.click('#fixDone')
+    page.keyboard.press('Control+z')
+    check('undo puts everyone back', page.locator('#problems li.x').count() > 5)
+    page.click('#btnSample'); page.wait_for_timeout(200)
 
     # timeline + floating selection bar (sample show: 3 sets, 24 + 24 counts)
     page.set_viewport_size({'width': 1440, 'height': 860})

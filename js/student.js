@@ -103,7 +103,7 @@ function render() {
       chips.push(`<span class="chip${mv.big ? ' big' : ''}">${mv.label}${mv.big ? ' — big step!' : ''}</span>`);
     }
     if (set.bpm) chips.push(`<span class="chip">♩ = ${set.bpm}</span>`);
-    for (const c of collisionsInto(st.show, st.cur).filter(c => c.a.id === st.me || c.b.id === st.me)) {
+    for (const c of collisionsInto(st.show, st.cur).filter(c => (c.a.id === st.me || c.b.id === st.me) && !(st.show.ok || {})[`x:${st.cur}:${[c.a.id, c.b.id].sort().join(':')}`])) {
       const other = c.a.id === st.me ? c.b : c.a;
       chips.push(`<span class="chip big">⚠ Watch ${esc(other.label)} around count ${c.count}</span>`);
     }

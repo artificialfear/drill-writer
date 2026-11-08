@@ -132,6 +132,7 @@ export function normalizeShow(s) {
   const show = Object.assign(base, s || {});
   show.field = Object.assign({ hash: 'hs' }, show.field || {});
   show.tempo = Object.assign({ bpm: 144 }, show.tempo || {});
+  show.ok = show.ok && typeof show.ok === 'object' ? show.ok : {}; // problems marked OK on purpose
   show.performers = (show.performers || []).filter(p => p && p.id);
   show.props = (show.props || []).filter(p => p && p.id);
   if (!Array.isArray(show.sets) || !show.sets.length) show.sets = newShow().sets;

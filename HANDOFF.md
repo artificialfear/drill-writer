@@ -99,6 +99,13 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Editor caches `collisions()` per set; `changed()` clears it. Problems list (`renderProblems`, Sets tab) = collisions + big steps, clickable. Timeline/set list classes `.collide`. Field markers drawn in `draw()`; bump rings when |frac − t*|·counts < 1.2.
 - Not yet in Drop/Add reports (Problems list catches anything new). Props and guard equipment swing aren't checked.
 
+## Auto-fix (`js/fix.js`)
+- Swap spots within ONE instrument (Mat's choice). For the move into set i: bottleneck assignment (binary search + augmenting-path matching) for the smallest max distance, then Hungarian on Euclidean distance (−0.3 bonus for keeping a student's own spot) → non-crossing paths. A section's swap is kept only if (collisions, big steps, worst distance) improves.
+- `applySwap(show, i, perm)`: from set i onward, each student takes the other's whole track (positions + form ids remapped) — later transitions are identical, only move i changes. `proposeAll` stacks per-set swaps in order.
+- `show.ok` = { 'x:i:idA:idB' | 'b:i:id': true } — problems marked intentional; filtered out of markers, timeline, set list, student chip, and auto-fix.
+- Review uses `state.drop.mode = 'fix'` (same lock/panel as Drop/Add), `zoomToPaths()` frames the swapped paths.
+- Next (Mat agreed): per-student timing ("hold N then move" / "move then hold N") — needs interpolation, step size, technique, collision check, 3D and student text to honor it; then auto-fix can suggest holds for cross-instrument collisions.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):
