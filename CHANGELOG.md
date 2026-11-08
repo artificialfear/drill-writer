@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.16.0 — 2026-11-08
+- **Tenors are quints**, laid out like a real carrier seen from above: the 13″ and 14″ drums out at the sides, the 10″ and 12″ in front, and the small 6″ drum in the middle closest to the marcher. All five hang from a bar across the front of the carrier.
+- **Bass drums face the 50.** On Side 1 the drum and body face Side 2, and on Side 2 they face Side 1, so the drum heads face the audience. When a bass crosses the 50 they spin (turning through facing the audience) to face it again. A small zone right on the 50 keeps them from flickering back and forth.
+- **Bass heads watch the drum major.** The head turns toward the drum major wherever they are (or toward the press box if there's no drum major), limited to how far a neck can actually turn.
+- Bass legs match their facing. Moving toward the audience while facing the 50 is a crab step, moving toward the 50 is a forward march, and moving away from it is a backward march.
+- The Dot tab and student phones describe bass moves the same way, for example "Crab step right (facing the 50, toward Side 2)". When a move crosses the 50: "March forward … · spin at the 50, then backward march".
+
 ## 0.15.0 — 2026-11-08
 - **Real band uniform in 3D.** Every marcher wears the same uniform:
   - Jacket: black, with a teal yoke and squared teal shoulder pads with silver piping. A silver band runs from the right shoulder down to the left hip, with teal above it. The collar is teal.

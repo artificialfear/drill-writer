@@ -778,7 +778,7 @@ function renderDotInfo() {
     const ss = i ? moveStep(state.show, i, p.id) : null, tt = timingText(ss);
     rows += `<tr class="${i === state.cur ? 'current' : ''}"><td>${escapeHtml(st.name)}</td><td>${i ? st.counts : '—'}${tt ? `<br><span class="help">${tt}</span>` : ''}</td>
       <td>${escapeHtml(describeX(q.x))}</td><td>${escapeHtml(describeY(q.y, state.show.field))}</td>
-      <td class="${ss && ss.big ? 'big' : ''}">${ss ? (ss.dist < 0.01 ? 'Hold' : `${ss.label}<br><span class="help">${technique(sec.family, state.show.sets[i - 1].pos[p.id], q).label}</span>`) : ''}</td></tr>`;
+      <td class="${ss && ss.big ? 'big' : ''}">${ss ? (ss.dist < 0.01 ? 'Hold' : `${ss.label}<br><span class="help">${technique(sec.family, state.show.sets[i - 1].pos[p.id], q, sec.key).label}</span>`) : ''}</td></tr>`;
   });
   box.innerHTML = `<h3 style="margin:0 0 6px">${escapeHtml(p.label)} <span class="help">${sec.name}</span></h3>
     <table class="dot-table"><thead><tr><th>Set</th><th>Cts</th><th>Side to side</th><th>Front to back</th><th>Step</th></tr></thead><tbody>${rows}</tbody></table>

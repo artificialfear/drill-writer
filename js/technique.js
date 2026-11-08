@@ -5,7 +5,22 @@
 
 const DEG = 180 / Math.PI;
 
-export function technique(family, a, b) {
+// Bass drums always face the 50 yard line (drum heads toward the audience's left/right), so their
+// facing depends on which side of the 50 they're on: Side 1 (x < 0) faces Side 2 (+x) and vice versa.
+// theta convention as above: +PI/2 = facing the marcher's left / Side 2.
+export const bassFacing = x => (x < 0 ? Math.PI / 2 : -Math.PI / 2);
+// legs for travel angle `theta` when the body faces `facing`
+export function legsFor(theta, facing) {
+  let rel = theta - facing;
+  while (rel > Math.PI) rel -= 2 * Math.PI;
+  while (rel < -Math.PI) rel += 2 * Math.PI;
+  const abs = Math.abs(rel) * DEG;
+  if (abs < 45) return { legs: 'forward', rel };
+  if (abs > 135) return { legs: 'backward', rel };
+  return { legs: 'crab', rel };
+}
+
+export function technique(family, a, b, section) {
   const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
   if (dist < 0.01 || family === 'pit') return { kind: 'hold', label: 'Hold', hipYaw: 0, bodyYaw: 0, legs: 'still' };
   const theta = Math.atan2(dx, -dy);                 // radians
@@ -21,6 +36,21 @@ export function technique(family, a, b) {
     else if (abs >= 70 && abs <= 110) dir = `toward ${sideName}`;
     else dir = abs < 90 ? `forward-${side}` : `back-${side}`;
     return { kind: 'travel', label: `Face & march ${dir}`, hipYaw: 0, bodyYaw: theta, legs: 'forward' };
+  }
+
+  if (section === 'bass') {
+    // face the 50; spin (through facing the audience) when crossing it
+    const facing = bassFacing(Math.abs(a.x) > 0.01 ? a.x : b.x);
+    const crosses = (a.x < -0.01 && b.x > 0.01) || (a.x > 0.01 && b.x < -0.01);
+    const { legs, rel } = legsFor(theta, facing);
+    const toward = facing > 0 ? 'Side 2' : 'Side 1';
+    const name = (lg, r) => lg === 'forward' ? 'March forward' : lg === 'backward' ? 'Backward march' : `Crab step ${r > 0 ? 'left' : 'right'}`;
+    let label = `${name(legs, rel)} (facing the 50, toward ${toward})`;
+    if (crosses) { // past the 50 they spin to face it again, which flips forward/backward and left/right
+      const after = legsFor(theta, -facing);
+      label += ` · spin at the 50, then ${name(after.legs, after.rel).toLowerCase()}`;
+    }
+    return { kind: legs === 'crab' ? 'crab' : legs, label, hipYaw: 0, bodyYaw: facing, legs };
   }
 
   if (family === 'battery') {

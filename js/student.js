@@ -83,7 +83,7 @@ function myMove(i) { // move INTO set i: step size + technique
   const A = st.show.sets[i - 1].pos[st.me], B = st.show.sets[i].pos[st.me];
   const mv = moveStep(st.show, i, st.me);
   mv.timing = timingText(mv);
-  mv.tech = technique(sectionByKey(me().section).family, A, B);
+  mv.tech = technique(sectionByKey(me().section).family, A, B, me().section);
   return mv;
 }
 function render() {

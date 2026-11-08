@@ -3,7 +3,7 @@
 // so the front sideline (audience) is toward +Z.
 import * as THREE from '../vendor/three-bundle.min.js';
 import { FIELD_DEPTH, GOAL_X, END_X, refLines, sectionByKey, pathFrac, moveStep } from './model.js';
-import { technique } from './technique.js';
+import { technique, bassFacing, legsFor } from './technique.js';
 
 const HALF_D = FIELD_DEPTH / 2;
 const toZ = y => HALF_D - y;
@@ -159,6 +159,7 @@ function stick(hand, tip, col = COL.stick, r = 0.013) {
 // Marcher's own right is −X (the front of a marcher faces +Z, toward the audience).
 const SH = { L: V(-0.3, 2.43, 0), R: V(0.3, 2.43, 0) }; // L = the shoulder on −X (marcher's right), R = +X
 const MOUTH = V(0, 2.7, 0.2);
+const NECK_Y = 2.62; // the head turns about this point
 const BASS_R = [0.4, 0.44, 0.49, 0.53, 0.58]; // bass 1–5: about 18", 20", 22", 24", 26"
 
 // Instrument + where the hands go, per section.
@@ -228,15 +229,18 @@ function instrument(key, opts = {}) {
       for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.04, top + 0.035, c.z + 0.06)));
       break;
     }
-    case 'tenors': { // sixes: four drums in an arc (14", 12", 10", 13") + two spocks (6", 8") out front
+    case 'tenors': { // quints (top-down like a real carrier): 13" and 14" out at the sides, 10" and 12" in front,
+      // and the small 6" drum in the middle closest to the marcher
       const top = 1.7;
-      const drums = [[-0.627, 0.292, 0.31, 0.46], [-0.219, 0.732, 0.27, 0.44], [0.29, 0.702, 0.22, 0.4], [0.627, 0.292, 0.29, 0.45],
-        [-0.15, 1.13, 0.13, 0.28, 0.06], [0.17, 1.12, 0.18, 0.3, 0.04]];
-      for (const [x, z, r, h, up = 0] of drums) g.push(...drum(V(x, top + up - h / 2, z), r, h, 'y', '#d9dadc'));
+      const drums = [[-0.65, 0.66, 0.29, 0.46], [0.65, 0.64, 0.31, 0.47], [-0.27, 1.01, 0.22, 0.4], [0.23, 1.03, 0.25, 0.42], [0, 0.6, 0.15, 0.3]];
+      for (const [x, z, r, h] of drums) g.push(...drum(V(x, top - h / 2, z), r, h, 'y', '#d9dadc'));
       for (const s of [-1, 1]) g.push(tube(V(s * 0.13, 2.38, 0.17), V(s * 0.12, 1.95, 0.24), 0.022, COL.chrome, 6));
-      g.push(box(V(0, 1.95, 0.25), 0.32, 0.04, 0.05, COL.chrome), tube(V(0, 1.95, 0.27), V(0, top - 0.05, 0.42), 0.026, COL.chrome, 6));
-      hands = { L: V(-0.34, top + 0.17, 0.5), R: V(0.34, top + 0.17, 0.5) };
-      for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.1, top + 0.05, 0.98)));
+      g.push(box(V(0, 1.95, 0.25), 0.32, 0.04, 0.05, COL.chrome), tube(V(0, 1.95, 0.27), V(0, top - 0.12, 0.4), 0.026, COL.chrome, 6));
+      // bar the drums hang from: across the back, out to the side drums
+      g.push(tube(V(-0.45, top - 0.12, 0.42), V(0.45, top - 0.12, 0.42), 0.02, COL.chrome, 6));
+      for (const s of [-1, 1]) g.push(tube(V(s * 0.45, top - 0.12, 0.42), V(s * 0.5, top - 0.12, 0.62), 0.02, COL.chrome, 6));
+      hands = { L: V(-0.34, top + 0.17, 0.48), R: V(0.34, top + 0.17, 0.48) };
+      for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.12, top + 0.05, 0.92)));
       break;
     }
     case 'bass': { // heads face the sides, drum high on the chest; size from the bass number (1 smallest … 5 largest)
@@ -309,23 +313,24 @@ function upperBody(sec, tone, opts = {}) {
   g.push(paint(new THREE.CylinderGeometry(0.262, 0.262, 0.07, 16).scale(1, 1, 0.64).translate(0, 1.6, 0), COL.black));
   // neck + head
   g.push(paint(new THREE.CylinderGeometry(0.075, 0.08, 0.16, 10).translate(0, 2.58, 0), skin));
-  g.push(ball(V(0, 2.79, 0.02), 0.175, skin, 1, 1.12, 1.05));
-  g.push(ball(V(0, 2.73, 0.2), 0.03, skin, 1, 1.2, 0.9)); // nose
+  const hd = []; // head, hair/shako, plume: separate so it can turn (bass drums watch the drum major)
+  hd.push(ball(V(0, 2.79, 0.02), 0.175, skin, 1, 1.12, 1.05));
+  hd.push(ball(V(0, 2.73, 0.2), 0.03, skin, 1, 1.2, 0.9)); // nose
   if (guard) { // hair + bun instead of a shako
-    g.push(paint(new THREE.SphereGeometry(0.185, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.12, 1.05).rotateX(-0.25).translate(0, 2.8, 0.0), HAIR[tone]));
-    g.push(ball(V(0, 2.92, -0.16), 0.08, HAIR[tone]));
+    hd.push(paint(new THREE.SphereGeometry(0.185, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.12, 1.05).rotateX(-0.25).translate(0, 2.8, 0.0), HAIR[tone]));
+    hd.push(ball(V(0, 2.92, -0.16), 0.08, HAIR[tone]));
   } else { // teal shako (a little wider at the top), silver band and chin strap, black visor, big teal feather plume
     const tall = dm ? 0.42 : 0.36, top = 2.92 + tall;
-    g.push(paint(new THREE.CylinderGeometry(0.205, 0.175, tall, 18).translate(0, 2.92 + tall / 2, -0.01), COL.teal));
-    g.push(paint(new THREE.CylinderGeometry(0.207, 0.207, 0.02, 18).translate(0, top - 0.01, -0.01), COL.silver));
-    g.push(paint(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 18).translate(0, 2.96, -0.01), COL.silver));
-    g.push(paint(new THREE.CylinderGeometry(0.2, 0.2, 0.016, 18, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.95).rotateX(0.2).translate(0, 2.93, 0.06), COL.visor));
-    g.push(paint(new THREE.TorusGeometry(0.17, 0.008, 4, 16, Math.PI).rotateZ(Math.PI).translate(0, 2.82, 0.03), COL.silver));
+    hd.push(paint(new THREE.CylinderGeometry(0.205, 0.175, tall, 18).translate(0, 2.92 + tall / 2, -0.01), COL.teal));
+    hd.push(paint(new THREE.CylinderGeometry(0.207, 0.207, 0.02, 18).translate(0, top - 0.01, -0.01), COL.silver));
+    hd.push(paint(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 18).translate(0, 2.96, -0.01), COL.silver));
+    hd.push(paint(new THREE.CylinderGeometry(0.2, 0.2, 0.016, 18, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.95).rotateX(0.2).translate(0, 2.93, 0.06), COL.visor));
+    hd.push(paint(new THREE.TorusGeometry(0.17, 0.008, 4, 16, Math.PI).rotateZ(Math.PI).translate(0, 2.82, 0.03), COL.silver));
     // plume: a clump of feathers rising from the front of the crown and leaning back
     const s = dm ? 1.25 : 1;
     const feathers = [[0, 0.06, 0.1, 0.07, COL.black], [0, 0.16, 0.06, 0.1, COL.tealDark], [0.05, 0.28, 0.0, 0.11, COL.teal], [-0.05, 0.3, 0.01, 0.11, COL.teal],
       [0, 0.42, -0.06, 0.12, COL.tealLight], [0.04, 0.54, -0.12, 0.1, COL.teal], [-0.03, 0.62, -0.17, 0.08, COL.tealLight]];
-    for (const [x, y, z, r, col] of feathers) g.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
+    for (const [x, y, z, r, col] of feathers) hd.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
   }
   // arms (black sleeves) from shoulders to hands
   const ins = instrument(sec.key, opts);
@@ -337,11 +342,12 @@ function upperBody(sec, tone, opts = {}) {
     g.push(ball(hd, 0.064, skin, 1, 0.9, 1.15));
   }
   g.push(...ins.geos);
-  const merged = THREE.mergeGeometries(g);
-  g.forEach(x => x.dispose());
-  merged.computeBoundingSphere();
-  upperCache.set(key, merged);
-  return merged;
+  const merged = THREE.mergeGeometries(g), headGeo = THREE.mergeGeometries(hd).translate(0, -NECK_Y, 0);
+  [...g, ...hd].forEach(x => x.dispose());
+  merged.computeBoundingSphere(); headGeo.computeBoundingSphere();
+  const out = { body: merged, head: headGeo };
+  upperCache.set(key, out);
+  return out;
 }
 
 const GEO = {
@@ -404,7 +410,10 @@ function buildPerson(p) {
   const body = new THREE.Group(); root.add(body);
   // bass drums are sized by the bass number in the label (D1 = smallest … D5 = largest)
   const opts = sec.key === 'bass' ? { bass: Math.min(5, Math.max(1, parseInt(String(p.label).replace(/\D+/g, ''), 10) || 3)) } : {};
-  body.add(new THREE.Mesh(upperBody(sec, hash(p.id) % SKIN.length, opts), MAT.upper));
+  const up = upperBody(sec, hash(p.id) % SKIN.length, opts);
+  body.add(new THREE.Mesh(up.body, MAT.upper));
+  const head = new THREE.Group(); head.position.y = NECK_Y; body.add(head);
+  head.add(new THREE.Mesh(up.head, MAT.upper));
   const hips = new THREE.Group(); hips.position.y = HIP; body.add(hips);
   hips.add(new THREE.Mesh(GEO.pelvis, MAT.pants));
   const L = makeLeg(1), R = makeLeg(-1); // marcher's left leg is on +X
@@ -419,9 +428,10 @@ function buildPerson(p) {
   const ring = new THREE.Mesh(GEO.ring, MAT.ring); ring.position.y = 0.05; ring.visible = false; ring.renderOrder = 2;
   const label = labelSprite(p.label);
   root.add(shadow, ring, label);
-  root.userData.parts = { body, hips, L, R, ring, label };
+  root.userData.parts = { body, hips, head, L, R, ring, label };
+  root.userData.bass = sec.key === 'bass';
   root.userData.family = sec.family;
-  root.userData.yaw = { hips: 0, body: 0 };
+  root.userData.yaw = { hips: 0, body: 0, head: 0 };
   root.userData.pose = { tL: 0, kL: 0, fL: 0, zL: 0, tR: 0, kR: 0, fR: 0, zR: 0, y: 0 };
   root.userData.seed = (hash(p.id) % 1000) / 159;
   root.traverse(o => { o.userData.pid = p.id; });
@@ -586,6 +596,7 @@ export function create3D(container, { getFrame, onPick }) {
     const inMotion = frame.frac > 0;
     const local = inMotion ? frame.frac * (B.counts || 0) : 0; // counts into this move
     const now = performance.now() / 1000;
+    const dmId = (show.performers.find(p => p.section === 'dm') || {}).id;
     for (const p of show.performers) {
       const g = people.get(p.id); if (!g) continue;
       const q = frame.pos[p.id];
@@ -596,10 +607,28 @@ export function create3D(container, { getFrame, onPick }) {
       const moving = inMotion && pf > 0 && pf < 1 && Math.hypot(B.pos[p.id].x - A.pos[p.id].x, B.pos[p.id].y - A.pos[p.id].y) > 0.05;
       // technique for this move: winds slide (hips toward travel, torso to the box), battery crab step,
       // guard/DM turn their whole body; moving backward = hips away from travel, stepping back
-      const t = moving ? technique(g.userData.family, A.pos[p.id], B.pos[p.id]) : null;
+      let t = moving ? technique(g.userData.family, A.pos[p.id], B.pos[p.id], p.section) : null;
       const yaw = g.userData.yaw;
+      if (g.userData.bass) {
+        // bass drums face the 50 from wherever they are; crossing it, they spin (through facing the audience).
+        // A small dead zone on the 50 stops them flickering back and forth while standing on it.
+        if (g.userData.side == null || Math.abs(q.x) > 0.3) g.userData.side = q.x < 0 ? -1 : 1;
+        const facing = bassFacing(g.userData.side);
+        if (t) {
+          const dx = B.pos[p.id].x - A.pos[p.id].x, dy = B.pos[p.id].y - A.pos[p.id].y;
+          t = { ...t, hipYaw: 0, bodyYaw: facing, legs: legsFor(Math.atan2(dx, -dy), facing).legs };
+        }
+        yaw.body = turnToward(yaw.body, facing);
+        // head watches the drum major (or the press box if there isn't one), within what a neck can do
+        const dmQ = dmId && frame.pos[dmId];
+        const want = dmQ ? Math.atan2(dmQ.x - q.x, q.y - dmQ.y) : 0;
+        let rel = want - yaw.body;
+        while (rel > Math.PI) rel -= 2 * Math.PI;
+        while (rel < -Math.PI) rel += 2 * Math.PI;
+        yaw.head = turnToward(yaw.head, Math.max(-1.6, Math.min(1.6, rel)));
+        g.userData.parts.head.rotation.y = yaw.head;
+      } else yaw.body = turnToward(yaw.body, t ? t.bodyYaw : 0);
       yaw.hips = turnToward(yaw.hips, t ? t.hipYaw : 0);
-      yaw.body = turnToward(yaw.body, t ? t.bodyYaw : 0);
       hips.rotation.y = yaw.hips; body.rotation.y = yaw.body;
       if (t && t.legs !== 'still') {
         const mv = moveStep(show, frame.i + 1, p.id);
