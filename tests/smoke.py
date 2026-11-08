@@ -56,6 +56,7 @@ with sync_playwright() as p:
     ys = {round(q['y'], 2) for q in pos}; xs = sorted(q['x'] for q in pos)
     check('line puts everyone on one front-to-back spot', len(ys) == 1)
     check('line uses 2-step interval', all(abs((xs[i + 1] - xs[i]) - 2) < 0.01 for i in range(7)))
+    check('after making a form the tool goes back to Select', page.evaluate('__dw.tool') == 'select')
 
     # add set, move selection with arrow keys, check counts/step size
     page.click('.tab[data-tab=sets]'); page.click('#btnAddSet')

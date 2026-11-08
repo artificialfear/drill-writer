@@ -358,6 +358,11 @@ function applyTargets(t, type, extra = {}) {
     if (ids.length > 1) st.forms.push({ id: uid('f'), type, ids, ...extra });
   }
   changed();
+  // a form is a one-shot action: go back to Select so the next click picks dots instead of re-forming them
+  if (type && state.tool !== 'select') {
+    setTool('select');
+    toast(`${type[0].toUpperCase() + type.slice(1)} made — back to Select. Ctrl+Z undoes it.`);
+  }
 }
 function needSelection() {
   if (state.sel.size) return true;
@@ -430,10 +435,10 @@ function evPos(e) { const r = canvas.getBoundingClientRect(); return { px: e.cli
 
 const toolHints = {
   select: 'Click or drag a box to select · drag dots to move · arrow keys nudge 1 step (Shift = 4)',
-  line: 'Drag to draw a line · selected performers fill it in order · Shift = any angle',
-  arc: 'Click the start, click the end, then click where the arc should bulge',
-  block: 'Click where the FRONT-LEFT corner of the block goes',
-  circle: 'Click the center of the circle',
+  line: 'Drag to draw a line · selected performers fill it in order · Shift = any angle · Esc = cancel',
+  arc: 'Click the start, click the end, then click where the arc should bulge · Esc = cancel',
+  block: 'Click where the FRONT-LEFT corner of the block goes · Esc = cancel',
+  circle: 'Click the center of the circle · Esc = cancel',
   pan: 'Drag to pan · scroll to zoom'
 };
 function setTool(t) {

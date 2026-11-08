@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.8.1 — 2026-11-07
+- After Line, Arc, Block or Circle places the dots, the app switches back to Select automatically, so the next click picks a student instead of re-forming the group. A short message confirms it (Ctrl+Z undoes the form).
+- Form tool hints now say "Esc = cancel".
+
 ## 0.8.0 — 2026-11-07
 - **Set timeline** across the bottom: one block per set, sized by its counts, with a red playhead. Click a block to go to that set, drag along it to scrub, drag a block's right edge to change its counts (undoable). A red dot marks sets with steps bigger than 6 to 5, ✎ marks sets with notes, "hold" marks sets where nobody moves. **+ Set** adds a set after the current one.
 - **Selection bar**: select dots and their tools appear right next to them — Line, Arc, Block, Circle, interval and block columns, rotate, expand/contract, flip, mirror across the 50, reverse, copy previous spots, and (for one student) Drop… and Preview. It moves out of the way of other dots.
