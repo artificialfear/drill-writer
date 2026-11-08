@@ -284,6 +284,12 @@ function instrument(key, opts = {}) {
   return { geos: g, hands, elbows };
 }
 
+// Sequinned guard sash: each little facet catches the light a bit differently
+const SEQUIN = ['#1fa3a6', '#2bbcbb', '#168486', '#62d8d2', '#127072', '#3fcac6'];
+function sequins(x, y, z) {
+  const h = Math.abs(Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453) % 1;
+  return SEQUIN[Math.floor(h * SEQUIN.length)];
+}
 // Jacket pattern (front): teal yoke across the shoulders and down the marcher's left side,
 // split from the black by a silver band running from the right shoulder down to the left hip. Back: teal yoke only.
 function jacketColor(x, y, z) {
@@ -302,23 +308,34 @@ function upperBody(sec, tone, opts = {}) {
   if (upperCache.has(key)) return upperCache.get(key);
   const skin = SKIN[tone], guard = sec.family === 'guard', dm = sec.family === 'dm';
   const g = [];
-  // jacket: tapered, flattened torso painted with the uniform pattern; shoulder pads; stand-up collar; belt
-  g.push(paint(new THREE.CylinderGeometry(0.3, 0.25, 0.92, 72, 44).scale(1, 1, 0.62).translate(0, 2.0, 0), jacketColor));
-  for (const s of [-1, 1]) { // squared-off shoulder pads that stick out past the shoulders, silver piping underneath
-    g.push(ball(V(s * 0.27, 2.45, 0), 0.2, COL.teal, 1.0, 0.42, 0.85));
-    g.push(paint(new THREE.TorusGeometry(0.19, 0.012, 4, 20).rotateX(Math.PI / 2).scale(1, 1, 0.85).translate(s * 0.27, 2.43, 0), COL.silver));
+  if (guard) {
+    // guard: fitted black sleeveless mock-neck top, wide sparkly teal sash at the waist, bare arms
+    g.push(paint(new THREE.CylinderGeometry(0.25, 0.215, 0.86, 32, 4).scale(1, 1, 0.62).translate(0, 2.0, 0), COL.black));
+    g.push(limb(V(-0.19, 2.42, 0), V(0.19, 2.42, 0), 0.075, COL.black)); // top of the shoulders
+    g.push(paint(new THREE.CylinderGeometry(0.085, 0.09, 0.11, 14).translate(0, 2.5, 0), COL.black)); // mock neck
+    g.push(paint(new THREE.CylinderGeometry(0.245, 0.28, 0.22, 56, 7).scale(1, 1, 0.68).translate(0, 1.62, 0), sequins));
+    for (const sd of ['L', 'R']) g.push(ball(SH[sd], 0.072, skin));
+  } else {
+    // jacket: tapered, flattened torso painted with the uniform pattern; shoulder pads; stand-up collar; belt
+    g.push(paint(new THREE.CylinderGeometry(0.3, 0.25, 0.92, 72, 44).scale(1, 1, 0.62).translate(0, 2.0, 0), jacketColor));
+    for (const s of [-1, 1]) { // squared-off shoulder pads that stick out past the shoulders, silver piping underneath
+      g.push(ball(V(s * 0.27, 2.45, 0), 0.2, COL.teal, 1.0, 0.42, 0.85));
+      g.push(paint(new THREE.TorusGeometry(0.19, 0.012, 4, 20).rotateX(Math.PI / 2).scale(1, 1, 0.85).translate(s * 0.27, 2.43, 0), COL.silver));
+    }
+    g.push(paint(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 14).translate(0, 2.52, 0), COL.teal));
+    g.push(paint(new THREE.CylinderGeometry(0.102, 0.102, 0.018, 14).translate(0, 2.585, 0), COL.silver));
+    g.push(paint(new THREE.CylinderGeometry(0.262, 0.262, 0.07, 16).scale(1, 1, 0.64).translate(0, 1.6, 0), COL.black));
   }
-  g.push(paint(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 14).translate(0, 2.52, 0), COL.teal));
-  g.push(paint(new THREE.CylinderGeometry(0.102, 0.102, 0.018, 14).translate(0, 2.585, 0), COL.silver));
-  g.push(paint(new THREE.CylinderGeometry(0.262, 0.262, 0.07, 16).scale(1, 1, 0.64).translate(0, 1.6, 0), COL.black));
   // neck + head
   g.push(paint(new THREE.CylinderGeometry(0.075, 0.08, 0.16, 10).translate(0, 2.58, 0), skin));
   const hd = []; // head, hair/shako, plume: separate so it can turn (bass drums watch the drum major)
   hd.push(ball(V(0, 2.79, 0.02), 0.175, skin, 1, 1.12, 1.05));
   hd.push(ball(V(0, 2.73, 0.2), 0.03, skin, 1, 1.2, 0.9)); // nose
-  if (guard) { // hair + bun instead of a shako
-    hd.push(paint(new THREE.SphereGeometry(0.185, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.12, 1.05).rotateX(-0.25).translate(0, 2.8, 0.0), HAIR[tone]));
-    hd.push(ball(V(0, 2.92, -0.16), 0.08, HAIR[tone]));
+  if (guard) { // long hair worn down: over the crown, down the back, a strand falling in front of each shoulder
+    const hair = HAIR[tone];
+    hd.push(paint(new THREE.SphereGeometry(0.185, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.58).scale(1.02, 1.12, 1.06).rotateX(-0.62).translate(0, 2.8, -0.01), hair));
+    hd.push(ball(V(0, 2.58, -0.11), 0.17, hair, 1.08, 2.0, 0.55));
+    for (const sd of [-1, 1]) hd.push(ball(V(sd * 0.17, 2.58, -0.03), 0.065, hair, 0.7, 2.6, 0.8));
   } else { // teal shako (a little wider at the top), silver band and chin strap, black visor, big teal feather plume
     const tall = dm ? 0.42 : 0.36, top = 2.92 + tall;
     hd.push(paint(new THREE.CylinderGeometry(0.205, 0.175, tall, 18).translate(0, 2.92 + tall / 2, -0.01), COL.teal));
@@ -337,8 +354,8 @@ function upperBody(sec, tone, opts = {}) {
   for (const s of ['L', 'R']) {
     const sh = SH[s], hd = ins.hands[s], sign = s === 'L' ? -1 : 1;
     const el = ins.elbows ? ins.elbows[s] : sh.clone().add(hd).multiplyScalar(0.5).add(V(sign * 0.13, -0.14, -0.04));
-    g.push(limb(sh, el, 0.078, COL.black));
-    g.push(limb(el, hd, 0.066, COL.black));
+    g.push(limb(sh, el, guard ? 0.064 : 0.078, guard ? skin : COL.black));
+    g.push(limb(el, hd, guard ? 0.055 : 0.066, guard ? skin : COL.black));
     g.push(ball(hd, 0.064, skin, 1, 0.9, 1.15));
   }
   g.push(...ins.geos);
@@ -354,6 +371,7 @@ const GEO = {
   pelvis: new THREE.CylinderGeometry(0.262, 0.25, 0.3, 14).scale(1, 1, 0.64).translate(0, 0.02, 0),
   thigh: new THREE.CapsuleGeometry(0.118, THIGH - 0.14, 3, 10).translate(0, -THIGH / 2, 0),
   shin: new THREE.CapsuleGeometry(0.092, SHIN - 0.1, 3, 10).translate(0, -SHIN / 2, 0),
+  shinFlare: new THREE.CylinderGeometry(0.085, 0.135, SHIN + 0.02, 14).translate(0, -SHIN / 2 - 0.01, 0), // guard: flared pants
   shoe: (() => { const g = new THREE.CapsuleGeometry(0.075, 0.24, 3, 8).rotateX(Math.PI / 2).scale(1, 0.75, 1).translate(0, -0.03, 0.07); return g; })(),
   shadow: new THREE.CircleGeometry(0.8, 24).rotateX(-Math.PI / 2),
   ring: new THREE.RingGeometry(0.72, 0.9, 28).rotateX(-Math.PI / 2)
@@ -393,11 +411,11 @@ function labelSprite(text) {
 // stable "random" per performer (skin tone etc.)
 const hash = s => { let h = 2166136261; for (const ch of String(s)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619); return h >>> 0; };
 
-function makeLeg(side) {
+function makeLeg(side, flare) {
   const thigh = new THREE.Group(); thigh.position.set(side * 0.125, 0, 0);
   thigh.add(new THREE.Mesh(GEO.thigh, MAT.pants));
   const knee = new THREE.Group(); knee.position.y = -THIGH; thigh.add(knee);
-  knee.add(new THREE.Mesh(GEO.shin, MAT.pants));
+  knee.add(new THREE.Mesh(flare ? GEO.shinFlare : GEO.shin, MAT.pants));
   const ankle = new THREE.Group(); ankle.position.y = -SHIN; knee.add(ankle);
   ankle.add(new THREE.Mesh(GEO.shoe, MAT.shoe));
   return { thigh, knee, ankle };
@@ -416,7 +434,7 @@ function buildPerson(p) {
   head.add(new THREE.Mesh(up.head, MAT.upper));
   const hips = new THREE.Group(); hips.position.y = HIP; body.add(hips);
   hips.add(new THREE.Mesh(GEO.pelvis, MAT.pants));
-  const L = makeLeg(1), R = makeLeg(-1); // marcher's left leg is on +X
+  const L = makeLeg(1, sec.family === 'guard'), R = makeLeg(-1, sec.family === 'guard'); // marcher's left leg is on +X
   hips.add(L.thigh, R.thigh);
   if (sec.family === 'guard') {
     const geo = new THREE.PlaneGeometry(1.3, 0.85, 10, 3).translate(0.65, 0, 0);

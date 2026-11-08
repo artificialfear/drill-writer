@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.17.0 — 2026-11-08
+- **Color guard uniform** to match this year's guard:
+  - Top: fitted black sleeveless mock-neck, with bare arms.
+  - Sash: wide sparkly teal sequinned sash at the waist. Each facet is a slightly different shade, so it glints.
+  - Pants: black flared.
+  - Hair: long and worn down over the crown and down the back, with a strand in front of each shoulder.
+  - Silk: teal, as before.
+- Guard uniforms change every year; to update them, see `upperBody()` (the guard branch), `SEQUIN`, and `GEO.shinFlare` in `js/view3d.js`.
+
 ## 0.16.0 — 2026-11-08
 - **Tenors are quints**, laid out like a real carrier seen from above: the 13″ and 14″ drums out at the sides, the 10″ and 12″ in front, and the small 6″ drum in the middle closest to the marcher. All five hang from a bar across the front of the carrier.
 - **Bass drums face the 50.** On Side 1 the drum and body face Side 2, and on Side 2 they face Side 1, so the drum heads face the audience. When a bass crosses the 50 they spin (turning through facing the audience) to face it again. A small zone right on the 50 keeps them from flickering back and forth.
