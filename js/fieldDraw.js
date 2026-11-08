@@ -5,16 +5,19 @@ export const css = name => getComputedStyle(document.documentElement).getPropert
 
 // v = { scale, ox, oy }  (screen = ox + x*scale, oy - y*scale)
 export function drawField(ctx, v, field, W, H) {
-  const sx = x => v.ox + x * v.scale, sy = y => v.oy - y * v.scale;
+  // v.flip = performer's view: rotated 180° so the front sideline is at the top and Side 1 on the right
+  const f = v.flip ? -1 : 1;
+  const sx = x => v.ox + f * x * v.scale, sy = y => v.oy - f * y * v.scale;
+  const box = (x0, y0, x1, y1) => { const a = sx(x0), b = sx(x1), c = sy(y0), d = sy(y1); return [Math.min(a, b), Math.min(c, d), Math.abs(b - a), Math.abs(d - c)]; };
   const c = { turf: css('--turf'), line: css('--turf-line'), strong: css('--turf-strong'), grid: css('--turf-grid'), bg: css('--bg'), muted: css('--muted') };
   const s = v.scale;
   ctx.fillStyle = c.bg; ctx.fillRect(0, 0, W, H);
   // turf incl. end zones
   ctx.fillStyle = c.turf;
-  ctx.fillRect(sx(-END_X), sy(FIELD_DEPTH), END_X * 2 * s, FIELD_DEPTH * s);
+  ctx.fillRect(...box(-END_X, 0, END_X, FIELD_DEPTH));
   ctx.fillStyle = c.grid;
-  ctx.fillRect(sx(-END_X), sy(FIELD_DEPTH), (END_X - GOAL_X) * s, FIELD_DEPTH * s);
-  ctx.fillRect(sx(GOAL_X), sy(FIELD_DEPTH), (END_X - GOAL_X) * s, FIELD_DEPTH * s);
+  ctx.fillRect(...box(-END_X, 0, -GOAL_X, FIELD_DEPTH));
+  ctx.fillRect(...box(GOAL_X, 0, END_X, FIELD_DEPTH));
 
   // 4-step grid: x from the 50, y measured out from each hash
   if (s >= 3) {
@@ -38,7 +41,7 @@ export function drawField(ctx, v, field, W, H) {
   }
   // sidelines / end lines
   ctx.strokeStyle = c.strong; ctx.lineWidth = 2;
-  ctx.strokeRect(sx(-END_X), sy(FIELD_DEPTH), END_X * 2 * s, FIELD_DEPTH * s);
+  ctx.strokeRect(...box(-END_X, 0, END_X, FIELD_DEPTH));
 
   // hashes: a tick every yard + a bold mark on each yard line
   const refs = refLines(field);

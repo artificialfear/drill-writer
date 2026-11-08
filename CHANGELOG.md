@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.1 — 2026-11-07
+- Student view now opens in **Performer view** by default: the field is turned around the way a marcher sees it facing the audience (front sideline at the top, Side 1 on the right). **Director** switches to the press-box view. The phone remembers the choice.
+- In 3D, Performer view puts the camera just behind and above the student, looking toward the audience; Director view looks from the front. "Field" uses the backfield or press-box camera to match.
+- Nearby says "your left / your right" in Performer view (Side 1 is on your right when facing front).
+
 ## 0.6.0 — 2026-11-07
 - **Student view** (`student.html`), built for phones. Students pick their drill ID once; the phone remembers it.
   - Their dot is highlighted (everyone else dimmed); "Me" zoom follows them, "Field" shows the whole band. Gray dashed arrow = where they came from, orange arrow = where they go next. Neighbors are labeled.

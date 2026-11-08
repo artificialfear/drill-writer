@@ -13,7 +13,11 @@ const PREVIEW = params.has('preview');
 const STORE_KEY = 'drillwriter.show.v1';
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-const st = { show: null, me: null, cur: 0, count: 0, playing: false, zoom: 'me', mode: '2d', v3: null };
+const POV_KEY = 'drillwriter.pov';
+let savedPov = 'performer'; try { savedPov = localStorage.getItem(POV_KEY) || 'performer'; } catch (e) {}
+// pov: 'performer' = as the student sees it facing the audience (front at the top, Side 1 on the right);
+//      'director'  = from the press box (front at the bottom, Side 1 on the left)
+const st = { show: null, me: null, cur: 0, count: 0, playing: false, zoom: 'me', mode: '2d', v3: null, pov: savedPov === 'director' ? 'director' : 'performer' };
 window.__sv = st;
 
 // ---------- loading ----------
@@ -110,7 +114,11 @@ function renderSheet() {
 }
 function neighbors(i) {
   const pos = st.show.sets[i].pos, M = pos[st.me];
-  const dirs = [
+  const perf = st.pov === 'performer';
+  const dirs = perf ? [ // facing the audience: Side 1 is on your right
+    { name: '◀ Your left (Side 2)', v: { x: 1, y: 0 } }, { name: 'Your right (Side 1) ▶', v: { x: -1, y: 0 } },
+    { name: '▲ In front of you (toward audience)', v: { x: 0, y: -1 } }, { name: '▼ Behind you (toward back)', v: { x: 0, y: 1 } }
+  ] : [
     { name: '◀ Toward Side 1', v: { x: -1, y: 0 } }, { name: 'Toward Side 2 ▶', v: { x: 1, y: 0 } },
     { name: '▼ In front (toward audience)', v: { x: 0, y: -1 } }, { name: '▲ Behind (toward back)', v: { x: 0, y: 1 } }
   ];
@@ -145,16 +153,18 @@ function resize() {
   draw();
 }
 function fitView(focus) {
+  const f = st.pov === 'performer' ? -1 : 1;
+  view.flip = f === -1;
   if (st.zoom === 'me' && focus) {
     view.scale = Math.min(W / 52, H / 34);
-    view.ox = W / 2 - focus.x * view.scale;
-    view.oy = H * 0.58 + focus.y * view.scale;
+    view.ox = W / 2 - f * focus.x * view.scale;
+    view.oy = H * 0.58 + f * focus.y * view.scale; // a little below center, so more of the field ahead shows
   } else {
     view.scale = Math.min((W - 12) / 200, (H - 12) / 104);
-    view.ox = W / 2; view.oy = H / 2 + 40.7 * view.scale;
+    view.ox = W / 2; view.oy = H / 2 + f * 40.7 * view.scale;
   }
 }
-const sx = x => view.ox + x * view.scale, sy = y => view.oy - y * view.scale;
+const sx = x => view.ox + (view.flip ? -1 : 1) * x * view.scale, sy = y => view.oy - (view.flip ? -1 : 1) * y * view.scale;
 function arrow(a, b, color, width, dash) {
   ctx.save(); ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash || []);
   const x0 = sx(a.x), y0 = sy(a.y), x1 = sx(b.x), y1 = sy(b.y);
@@ -335,7 +345,7 @@ async function setMode(mode) {
     try {
       const m = await import('./view3d.js');
       st.v3 = m.create3D($('view3d'), {
-        getFrame: () => ({ show: st.show, frame: positionsAt(st.show, st.count), count: st.count, sel: new Set([st.me]), selProp: null, labels: false, follow: st.zoom === 'me' ? st.me : null,
+        getFrame: () => ({ show: st.show, frame: positionsAt(st.show, st.count), count: st.count, sel: new Set([st.me]), selProp: null, labels: false, follow: st.zoom === 'me' ? st.me : null, followFrom: st.pov,
           dark: document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches }),
         onPick: () => {}
       });
@@ -346,6 +356,16 @@ async function setMode(mode) {
   canvas.style.visibility = mode === '3d' ? 'hidden' : '';
 
   if (mode === '3d') st.v3.show(); else { st.v3 && st.v3.hide(); draw(); }
+}
+
+// ---------- point of view ----------
+function setPov(pov, quiet) {
+  st.pov = pov;
+  try { localStorage.setItem(POV_KEY, pov); } catch (e) {}
+  $('povPerf').classList.toggle('on', pov === 'performer'); $('povDir').classList.toggle('on', pov === 'director');
+  if (st.v3) st.v3.setCamera(st.zoom === 'me' ? null : (pov === 'performer' ? 'backfield' : 'press'));
+  if (!quiet) toast(pov === 'performer' ? 'Performer view: facing the audience' : 'Director view: from the press box');
+  if (st.show && st.me) { renderNear(); draw(); }
 }
 
 // ---------- wiring ----------
@@ -359,7 +379,10 @@ function wire() {
   $('pFrom').onchange = updatePct; $('pPct').oninput = updatePct;
   $('practiceDlg').addEventListener('close', () => { if ($('practiceDlg').returnValue === 'go') goPractice(); });
   $('zoomMe').onclick = () => { st.zoom = 'me'; $('zoomMe').classList.add('on'); $('zoomAll').classList.remove('on'); draw(); };
-  $('zoomAll').onclick = () => { st.zoom = 'all'; $('zoomAll').classList.add('on'); $('zoomMe').classList.remove('on'); if (st.v3) st.v3.setCamera('press'); draw(); };
+  $('zoomAll').onclick = () => { st.zoom = 'all'; $('zoomAll').classList.add('on'); $('zoomMe').classList.remove('on'); if (st.v3) st.v3.setCamera(st.pov === 'performer' ? 'backfield' : 'press'); draw(); };
+  $('povPerf').onclick = () => setPov('performer');
+  $('povDir').onclick = () => setPov('director');
+  setPov(st.pov, true);
   $('v2d').onclick = () => setMode('2d'); $('v3d').onclick = () => setMode('3d');
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
     document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));

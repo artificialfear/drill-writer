@@ -185,7 +185,7 @@ export function create3D(container, { getFrame, onPick }) {
   renderer.domElement.style.display = 'block';
   renderer.domElement.style.touchAction = 'none';
 
-  let followLast = null;
+  let followLast = null, followSide = null;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 2000);
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -209,12 +209,13 @@ export function create3D(container, { getFrame, onPick }) {
   const props = new Map(); let propsKey = '';
   const peopleGroup = new THREE.Group(), propGroup = new THREE.Group();
   // "this is you" marker for the student view
-  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.9, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xff8a00 }));
+  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.2, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xff8a00 }));
   pointer.visible = false; scene.add(pointer);
   scene.add(peopleGroup, propGroup);
 
   function setCamera(key) {
     followLast = null;
+    if (!key) return; // re-aim the follow camera on the next frame
     const c = CAMERAS[key] || CAMERAS.press;
     camera.position.set(...c.pos); controls.target.set(...c.target); controls.update();
   }
@@ -249,7 +250,7 @@ export function create3D(container, { getFrame, onPick }) {
 
   function update() {
     const f = getFrame(); if (!f) return;
-    const { show, frame, count, sel, selProp, labels, dark, follow } = f;
+    const { show, frame, count, sel, selProp, labels, dark, follow, followFrom } = f;
     syncField(show, dark); syncPeople(show); syncProps(show);
     const A = show.sets[frame.i], B = show.sets[Math.min(frame.i + 1, show.sets.length - 1)];
     const inMotion = frame.frac > 0;
@@ -271,8 +272,14 @@ export function create3D(container, { getFrame, onPick }) {
     // follow one performer (student view): move camera + orbit target along with them
     if (follow && frame.pos[follow]) {
       const q = frame.pos[follow], tgt = new THREE.Vector3(q.x, 1.6, toZ(q.y));
-      pointer.visible = true; pointer.position.set(q.x, 5.2 + Math.sin(performance.now() / 300) * 0.25, toZ(q.y));
-      if (!followLast) { controls.target.copy(tgt); camera.position.set(tgt.x, 24, tgt.z + 38); }
+      pointer.visible = true; pointer.position.set(q.x, 4.9 + Math.sin(performance.now() / 300) * 0.15, toZ(q.y));
+      if (!followLast || followFrom !== followSide) {
+        // performer: just behind and above the marcher, looking toward the audience; director: from the front
+        followSide = followFrom;
+        controls.target.copy(tgt);
+        if (followFrom === "performer") camera.position.set(tgt.x, 15, tgt.z - 12);
+        else camera.position.set(tgt.x, 24, tgt.z + 38);
+      }
       else { const d = tgt.clone().sub(followLast); camera.position.add(d); controls.target.add(d); }
       followLast = tgt;
     } else { followLast = null; pointer.visible = false; }

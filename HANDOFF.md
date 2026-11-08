@@ -58,6 +58,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Field drawing shared with the editor via `js/fieldDraw.js` (drawField/shapePath/propCorners/css).
 - Personal HOLD/step logic uses the student's own move; Nearby = nearest performer within 10 steps inside a 45° cone toward each field direction.
 - Practice uses the same rehearsal engine + the device's saved rehearsal settings. 3D uses `create3D` with `follow` (camera + orbit target track the performer; orange cone marker).
+- Point of view: `st.pov` 'performer' (default, Mat's request) | 'director', saved in `drillwriter.pov`. 2D performer view = `view.flip` (180° rotation, text stays upright; `fieldDraw.drawField` supports `v.flip`). 3D follow camera sits behind the marcher (y 15, z −12) in performer view, in front (y 24, z +38) in director view.
 - Not yet: publishing, encrypted audio, offline service worker (session 3).
 
 ## Decisions Mat made
