@@ -52,6 +52,14 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - One device + speaker runs reps for the band (Mat's choice); phones can't be kept in sync without a network.
 - Test quirk: Playwright `select_option(value='2')` picked the option LABELED "2" (value 1) because set names are numbers — set selects via JS in tests.
 
+## Student view (`student.html`, `js/student.js`, `css/student.css`)
+- Read-only, phone-first. Show source: `?show=<name>` → `shows/<name>.json` (for session-3 publishing) else the editor's localStorage show (preview). `?id=` performer, `?set=` start set, `?preview=1` shows a banner and live-updates via the `storage` event.
+- Drill ID remembered per show title (`drillwriter.me.<title>`).
+- Field drawing shared with the editor via `js/fieldDraw.js` (drawField/shapePath/propCorners/css).
+- Personal HOLD/step logic uses the student's own move; Nearby = nearest performer within 10 steps inside a 45° cone toward each field direction.
+- Practice uses the same rehearsal engine + the device's saved rehearsal settings. 3D uses `create3D` with `follow` (camera + orbit target track the performer; orange cone marker).
+- Not yet: publishing, encrypted audio, offline service worker (session 3).
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):
@@ -72,6 +80,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
 1d. ✅ v0.4 — Add a student to finished drill; remembered empty spots.
 1e. ✅ v0.5 — Rehearse: count-off + click track over a range of sets, per-set tempo.
+1f. ✅ v0.6 — Student view + Preview as student (no publishing/offline yet).
 2. Session 2 — Audio + tempo map in the editor: load local MP3, waveform, count-1 offset, typed per-measure tempos then tap-along to fix rits/accels, fermatas as count holds, two-way scrubbing, playback speed, audio-delay setting, duration check.
 3. Session 3 — Publish for students (encrypted bundle, link + QR, service worker/offline) + performer view (pick drill ID → own dot sheet + highlighted 2D/3D animation + synced music), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.

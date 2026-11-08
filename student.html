@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b201d">
+<title>My Drill</title>
+<link rel="stylesheet" href="css/student.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%232f6b3c'/><circle cx='16' cy='16' r='7' fill='%23ffd166'/></svg>">
+</head>
+<body>
+<div id="previewBanner" class="preview-banner" hidden>
+  <span>Preview — what <strong id="pvWho">a student</strong> sees on their phone</span>
+  <button id="pvClose">Back to editor</button>
+</div>
+
+<!-- Pick your dot -->
+<section id="pickScreen" class="pick" hidden>
+  <h1 id="pickTitle">Find your drill ID</h1>
+  <p class="muted">Tap your ID. Your phone remembers it.</p>
+  <input id="pickSearch" type="search" placeholder="Search, e.g. T4" autocomplete="off">
+  <div id="pickList"></div>
+</section>
+
+<!-- Main view -->
+<section id="mainScreen" class="main" hidden>
+  <header class="top">
+    <button id="whoBtn" class="who" title="Change drill ID"><span id="whoLabel">T4</span><span id="whoSection" class="muted"></span> ▾</button>
+    <span id="showName" class="show-name muted"></span>
+    <div class="seg"><button id="v2d" class="on">2D</button><button id="v3d">3D</button></div>
+  </header>
+
+  <div class="stage" id="stage">
+    <canvas id="fieldCanvas" aria-label="Field"></canvas>
+    <div id="view3d" class="view3d" hidden></div>
+    <div class="zoom-btns">
+      <button id="zoomMe" class="on">Me</button><button id="zoomAll">Field</button>
+    </div>
+    <div id="bigCount" class="big-count" hidden>
+      <div class="bc-main"><span class="bc-n"></span><span class="bc-of"></span></div>
+      <div class="bc-bar"></div>
+      <div class="bc-sub"></div><div class="bc-next"></div>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button data-tab="drill" class="on">My dot</button>
+    <button data-tab="sheet">Dot sheet</button>
+    <button data-tab="near">Nearby</button>
+  </nav>
+
+  <div class="panel on" id="tab-drill">
+    <div class="set-nav">
+      <button id="prevSet" aria-label="Previous set">◀</button>
+      <div class="set-title"><span class="muted">Set</span> <strong id="setName">1</strong> <span id="setOf" class="muted"></span></div>
+      <button id="nextSet" aria-label="Next set">▶</button>
+    </div>
+    <div class="coord">
+      <div class="coord-row"><span class="coord-k">Side to side</span><span id="cX" class="coord-v"></span></div>
+      <div class="coord-row"><span class="coord-k">Front to back</span><span id="cY" class="coord-v"></span></div>
+    </div>
+    <div id="chips" class="chips"></div>
+    <p id="setNote" class="note" hidden></p>
+    <div id="nextInfo" class="next-info"></div>
+  </div>
+
+  <div class="panel" id="tab-sheet">
+    <div class="sheet-head"><h2 id="sheetTitle">Dot sheet</h2><button id="printBtn">Print / save PDF</button></div>
+    <table class="dot-table"><thead><tr><th>Set</th><th>Cts</th><th>Side to side</th><th>Front to back</th><th>Step</th></tr></thead><tbody id="sheetBody"></tbody></table>
+  </div>
+
+  <div class="panel" id="tab-near">
+    <p class="muted">Who is around you in set <strong id="nearSet"></strong>. Directions are as the audience sees the field.</p>
+    <ul id="nearList" class="near-list"></ul>
+  </div>
+
+  <footer class="controls">
+    <button id="playBtn" class="primary">▶ Play</button>
+    <button id="practiceBtn">Practice…</button>
+    <span id="clock" class="muted clock"></span>
+  </footer>
+
+  <dialog id="practiceDlg">
+    <form method="dialog" class="practice">
+      <h3>Practice with count-off</h3>
+      <label>From set <select id="pFrom"></select></label>
+      <label>To set <select id="pTo"></select></label>
+      <label>Tempo <span class="rng"><input id="pPct" type="range" min="50" max="120" step="5" value="100"><span id="pPctLabel"></span></span></label>
+      <label class="chk"><input id="pRepeat" type="checkbox"> Repeat</label>
+      <p class="muted small">Uses earbuds or the phone speaker. Count-off: <span id="pPattern"></span></p>
+      <div class="row"><button value="cancel">Cancel</button><button id="pGo" value="go" class="primary">▶ Go</button></div>
+    </form>
+  </dialog>
+</section>
+
+<section id="emptyScreen" class="pick" hidden>
+  <h1>No drill here yet</h1>
+  <p class="muted" id="emptyMsg">Open the editor and load or write a show first.</p>
+</section>
+
+<div id="toast" class="toast" role="status"></div>
+<script type="module" src="js/student.js"></script>
+</body>
+</html>

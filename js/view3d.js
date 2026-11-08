@@ -185,6 +185,7 @@ export function create3D(container, { getFrame, onPick }) {
   renderer.domElement.style.display = 'block';
   renderer.domElement.style.touchAction = 'none';
 
+  let followLast = null;
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 2000);
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -207,9 +208,13 @@ export function create3D(container, { getFrame, onPick }) {
   const people = new Map(); let peopleKey = '';
   const props = new Map(); let propsKey = '';
   const peopleGroup = new THREE.Group(), propGroup = new THREE.Group();
+  // "this is you" marker for the student view
+  const pointer = new THREE.Mesh(new THREE.ConeGeometry(0.9, 1.9, 16).rotateX(Math.PI), new THREE.MeshBasicMaterial({ color: 0xff8a00 }));
+  pointer.visible = false; scene.add(pointer);
   scene.add(peopleGroup, propGroup);
 
   function setCamera(key) {
+    followLast = null;
     const c = CAMERAS[key] || CAMERAS.press;
     camera.position.set(...c.pos); controls.target.set(...c.target); controls.update();
   }
@@ -244,7 +249,7 @@ export function create3D(container, { getFrame, onPick }) {
 
   function update() {
     const f = getFrame(); if (!f) return;
-    const { show, frame, count, sel, selProp, labels, dark } = f;
+    const { show, frame, count, sel, selProp, labels, dark, follow } = f;
     syncField(show, dark); syncPeople(show); syncProps(show);
     const A = show.sets[frame.i], B = show.sets[Math.min(frame.i + 1, show.sets.length - 1)];
     const inMotion = frame.frac > 0;
@@ -263,6 +268,14 @@ export function create3D(container, { getFrame, onPick }) {
       label.visible = labels || sel.has(p.id);
       if (g.userData.flag) g.userData.flag.rotation.y = Math.sin(performance.now() / 380 + q.x) * 0.25;
     }
+    // follow one performer (student view): move camera + orbit target along with them
+    if (follow && frame.pos[follow]) {
+      const q = frame.pos[follow], tgt = new THREE.Vector3(q.x, 1.6, toZ(q.y));
+      pointer.visible = true; pointer.position.set(q.x, 5.2 + Math.sin(performance.now() / 300) * 0.25, toZ(q.y));
+      if (!followLast) { controls.target.copy(tgt); camera.position.set(tgt.x, 24, tgt.z + 38); }
+      else { const d = tgt.clone().sub(followLast); camera.position.add(d); controls.target.add(d); }
+      followLast = tgt;
+    } else { followLast = null; pointer.visible = false; }
     for (const prop of show.props) {
       const m = props.get(prop.id), pp = frame.props[prop.id]; if (!m || !pp) continue;
       m.position.set(pp.x, 0, toZ(pp.y));

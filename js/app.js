@@ -5,6 +5,7 @@ import {
   setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
+import { css, drawField as drawFieldShared, shapePath as shapePathShared, propCorners } from './fieldDraw.js';
 import { createRehearsal, COUNTOFF_PRESETS, SOUNDS, DEFAULT_SETTINGS } from './rehearse.js';
 
 const $ = id => document.getElementById(id);
@@ -137,86 +138,8 @@ function zoomAt(px, py, f) {
 }
 
 // ---------------- Drawing ----------------
-const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-
-function drawField() {
-  const c = { turf: css('--turf'), line: css('--turf-line'), strong: css('--turf-strong'), grid: css('--turf-grid'), bg: css('--bg'), muted: css('--muted') };
-  const s = state.view.scale;
-  ctx.fillStyle = c.bg; ctx.fillRect(0, 0, W, H);
-  // turf incl. end zones
-  ctx.fillStyle = c.turf;
-  ctx.fillRect(sx(-END_X), sy(FIELD_DEPTH), END_X * 2 * s, FIELD_DEPTH * s);
-  ctx.fillStyle = c.grid;
-  ctx.fillRect(sx(-END_X), sy(FIELD_DEPTH), (END_X - GOAL_X) * s, FIELD_DEPTH * s);
-  ctx.fillRect(sx(GOAL_X), sy(FIELD_DEPTH), (END_X - GOAL_X) * s, FIELD_DEPTH * s);
-
-  // 4-step grid: x from the 50, y measured out from each hash
-  if (s >= 3) {
-    ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.beginPath();
-    for (let x = -GOAL_X; x <= GOAL_X; x += 4) { if (x % 8) { ctx.moveTo(sx(x), sy(0)); ctx.lineTo(sx(x), sy(FIELD_DEPTH)); } }
-    const refs = refLines(state.show.field);
-    for (let i = 0; i < refs.length; i++) {
-      const lo = i ? (refs[i - 1].y + refs[i].y) / 2 : 0, hi = i < refs.length - 1 ? (refs[i].y + refs[i + 1].y) / 2 : FIELD_DEPTH;
-      for (let y = refs[i].y; y >= lo - 1e-6; y -= 4) { if (y > 0.01 && y < FIELD_DEPTH - 0.01) { ctx.moveTo(sx(-GOAL_X), sy(y)); ctx.lineTo(sx(GOAL_X), sy(y)); } }
-      for (let y = refs[i].y + 4; y <= hi + 1e-6; y += 4) { if (y < FIELD_DEPTH - 0.01) { ctx.moveTo(sx(-GOAL_X), sy(y)); ctx.lineTo(sx(GOAL_X), sy(y)); } }
-    }
-    ctx.stroke();
-  }
-
-  // yard lines
-  for (let k = -10; k <= 10; k++) {
-    const x = k * 8;
-    ctx.strokeStyle = (k === 0 || Math.abs(k) === 10) ? c.strong : c.line;
-    ctx.lineWidth = (k === 0 || Math.abs(k) === 10) ? 2 : 1.25;
-    ctx.beginPath(); ctx.moveTo(sx(x), sy(0)); ctx.lineTo(sx(x), sy(FIELD_DEPTH)); ctx.stroke();
-  }
-  // sidelines / end lines
-  ctx.strokeStyle = c.strong; ctx.lineWidth = 2;
-  ctx.strokeRect(sx(-END_X), sy(FIELD_DEPTH), END_X * 2 * s, FIELD_DEPTH * s);
-
-  // hashes: a tick every yard + a bold mark on each yard line
-  const refs = refLines(state.show.field);
-  ctx.strokeStyle = c.strong; ctx.lineWidth = 1.5; ctx.beginPath();
-  for (const hy of [refs[1].y, refs[2].y]) {
-    for (let x = -GOAL_X; x <= GOAL_X + 1e-6; x += 1.6) {
-      const len = Math.abs(Math.round(x / 1.6)) % 5 === 0 ? 1.2 : 0.6;
-      ctx.moveTo(sx(x), sy(hy - len / 2)); ctx.lineTo(sx(x), sy(hy + len / 2));
-    }
-  }
-  for (let x = -GOAL_X; x <= GOAL_X + 1e-6; x += 1.6) { // sideline ticks
-    ctx.moveTo(sx(x), sy(0)); ctx.lineTo(sx(x), sy(0.8));
-    ctx.moveTo(sx(x), sy(FIELD_DEPTH)); ctx.lineTo(sx(x), sy(FIELD_DEPTH - 0.8));
-  }
-  ctx.stroke();
-
-  // yard numbers
-  ctx.fillStyle = c.line; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `600 ${Math.max(9, 3.2 * s)}px system-ui, sans-serif`;
-  for (let k = -8; k <= 8; k += 2) {
-    const n = 50 - 5 * Math.abs(k);
-    ctx.fillText(String(n), sx(k * 8), sy(19.2));
-    ctx.fillText(String(n), sx(k * 8), sy(FIELD_DEPTH - 19.2));
-  }
-  // orientation labels
-  ctx.fillStyle = c.muted; ctx.font = `600 ${Math.max(10, 1.8 * s)}px system-ui, sans-serif`;
-  ctx.fillText('SIDE 1', sx(-GOAL_X / 2), sy(-5));
-  ctx.fillText('SIDE 2', sx(GOAL_X / 2), sy(-5));
-  ctx.fillText('FRONT · AUDIENCE', sx(0), sy(-8.5));
-}
-
-function shapePath(family, x, y, r) {
-  ctx.beginPath();
-  if (family === 'battery' || family === 'pit') { ctx.rect(x - r, y - r, r * 2, r * 2); }
-  else if (family === 'guard') { ctx.moveTo(x, y - r * 1.25); ctx.lineTo(x + r * 1.2, y + r * 0.85); ctx.lineTo(x - r * 1.2, y + r * 0.85); ctx.closePath(); }
-  else if (family === 'dm') { for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.55 : r * 1.3; ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } ctx.closePath(); }
-  else ctx.arc(x, y, r, 0, Math.PI * 2);
-}
-
-function propCorners(pp, prop) {
-  const a = -(pp.rot || 0) * Math.PI / 180; // degrees, clockwise-positive on screen
-  const cos = Math.cos(a), sin = Math.sin(a), hw = prop.w / 2, hh = prop.h / 2;
-  return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([u, v]) => ({ x: pp.x + u * cos - v * sin, y: pp.y + u * sin + v * cos }));
-}
+function drawField() { drawFieldShared(ctx, state.view, state.show.field, W, H); }
+const shapePath = (family, x, y, r) => shapePathShared(ctx, family, x, y, r);
 
 function draw() {
   if (!state.show || !W || state.mode === '3d') return;
@@ -806,10 +729,12 @@ function renderDotInfo() {
     <div class="row" style="margin-top:10px;align-items:center">
       <label class="help">Instrument <select id="dotSection">${SECTIONS.map(x => `<option value="${x.key}"${x.key === p.section ? ' selected' : ''}>${x.name}</option>`).join('')}</select></label>
       <button id="dotDrop">Drop student…</button>
+      <button id="dotStudent">Preview as ${escapeHtml(p.label)}</button>
     </div>
     <p class="help">An alternate taking over this dot? Nothing needs to change — they learn ${escapeHtml(p.label)}'s dot sheet. Change the instrument above if they play something different.</p>`;
   $('dotSection').onchange = ev => { if (dropLocked()) return; pushUndo(); p.section = ev.target.value; changed(); };
   $('dotDrop').onclick = startDrop;
+  $('dotStudent').onclick = () => openStudentView(p.id);
 }
 
 // ---------------- Drop a student ----------------
@@ -1378,6 +1303,17 @@ function wireRehearse() {
 }
 window.__rh = { get engine() { return rehearsal; }, get settings() { return rh; } };
 
+// ---------------- Student view preview ----------------
+function openStudentView(id) {
+  if (!state.show.performers.length) return toast('Add performers first.');
+  clearTimeout(saveTimer);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state.show)); } catch (e) { return toast("Couldn't save the show for the preview on this device."); }
+  const one = id || (selIds().length === 1 ? selIds()[0] : '');
+  const url = `student.html?preview=1&set=${state.cur}${one ? `&id=${encodeURIComponent(one)}` : ''}`;
+  const w = window.open(url, '_blank');
+  if (!w) location.href = url; // pop-ups blocked: open in this tab
+}
+
 // ---------------- Wiring ----------------
 function init() {
   $('hashSelect').innerHTML = Object.entries(HASH_TYPES).map(([k, v]) => `<option value="${k}">${v.name}</option>`).join('');
@@ -1435,6 +1371,7 @@ function init() {
   $('btnDropPerf').onclick = startDrop;
   $('btnAddStudent').onclick = startAdd;
   wireRehearse();
+  $('btnStudent').onclick = () => openStudentView();
   $('btnRenumber').onclick = renumber;
   $('btnAddProp').onclick = () => addProp($('addPropKind').value);
 

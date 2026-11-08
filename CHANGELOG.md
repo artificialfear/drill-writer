@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-11-07
+- **Student view** (`student.html`), built for phones. Students pick their drill ID once; the phone remembers it.
+  - Their dot is highlighted (everyone else dimmed); "Me" zoom follows them, "Field" shows the whole band. Gray dashed arrow = where they came from, orange arrow = where they go next. Neighbors are labeled.
+  - Big, readable coordinates for each set, counts, their step size (or HOLD), set notes, and what's next. Swipe the field or use ◀ ▶ to change sets.
+  - ▶ Play with a personal big count (HOLD when *they* don't move) and **Practice…** with the count-off and click for a range of sets.
+  - Dot sheet tab (print / save as PDF) and Nearby tab (who's toward Side 1, Side 2, in front, behind).
+  - 3D view follows their marcher, with an orange marker over their head.
+- **Student view** button (top bar) and **Preview as T4** (Dot tab) in the editor open it for any performer. The preview updates live as you edit in the other tab.
+
 ## 0.5.1 — 2026-11-07
 - Big count now shows the set's total ("5 /16"), or counts left if you prefer (Rehearse › Big count shows).
 - A bar with one segment per count fills as the move goes, with a small gap every 8 counts.
