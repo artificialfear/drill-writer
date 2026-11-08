@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.14.0 — 2026-11-08
+- **More realistic marchers in 3D.** Every marcher now has real proportions: a tapered jacket in the section color with a white cross-belt and black waist belt, arms bent to hold the instrument, white gloves, a neck and head (five skin tones, varied per student), and a black shako with a gold band, visor, chin strap, plate, and plume. The drum major wears a white shako with a tall plume and holds a conducting pose. Guard members have hair instead of a shako.
+- **Real instruments in the hands:**
+  - Brass: trumpet, mellophone, baritone (bell-front, sized up in that order), trombone with the slide out front, and a sousaphone wrapped over the left shoulder with its bell above the head.
+  - Woodwinds: flute and piccolo held to the side, clarinet angled down, and alto, tenor, and bari saxes in increasing sizes.
+  - Battery: snare, a tenor quad with spock, bass drum on its side with mallets, and crash cymbals. All drums sit on carriers and have hoops and sticks.
+  - Front ensemble: a keyboard on legs with mallets.
+  - Guard: a 6-ft pole with a silk that waves.
+- **The legs actually march:**
+  - Hip, knee, and ankle joints.
+  - Glide (roll) step: toe high on the heel strike, rolling through the foot, knee bending only on the recovery, one step per count, left foot first.
+  - Stride length matches the step size (an 8-to-5 stride looks longer than a 16-to-5).
+  - Backward march: up on the toes.
+  - Crab step: legs swing side to side.
+  - Legs ease back to standing during holds.
+- Soft shadows under each marcher, grass texture on the field, and gentler color tone mapping. Name tags and the student "you" marker sit a little higher to clear the sousaphone bells.
+- Performance: everything above the waist (jacket, head, shako, arms, instrument) is merged into one mesh per instrument and skin tone, so a 60-person band draws about as fast as before.
+
 ## 0.13.0 — 2026-11-08
 - **Holds inside a move.** Select students, then **⏱ Timing** in the selection bar to set the move into the current set as "Hold 4, then move 12" or "Move 12, then hold 4" (or both). Everything follows it: playback and 3D (they stand still during the hold, legs only step while moving), step sizes (counted over the moving counts only, so a hold can create a big step — you're warned), the collision check, the Dot tab, and the student phone ("⏱ Hold 4, then 12", and the big count shows "HOLD — go on 5" or "HOLD — you're there").
 - Paths on the field show H4 at the start (hold first) or end (arrive early) of a timed move.
