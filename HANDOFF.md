@@ -78,6 +78,12 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 ## Playback rule
 - Sitting on set N (N>0), Play starts at set N-1 so it shows the move INTO set N (Mat's request, 2026-11-07). Mid-move it resumes. Rehearse mode is unchanged (explicit From/To).
 
+## App modes (v0.9)
+- `state.appMode` 'write' | 'rehearse' | 'students', mirrored on `body[data-mode]`; CSS shows/hides regions. `setAppMode()` stops playback, resets the tool, renders the mode, resizes the canvas.
+- Rehearse: the old sidebar tab is now `aside#tab-rehearse.rehearse-panel` (same element ids). Canvas pointer = pan only; editing keys ignored; timeline press = `pickRehearseRange(i, shift)`; `.tl-block.in-range` underlines the range.
+- Students: `iframe#studentFrame` → `student.html?embed=1&preview=1&id=…&set=…` (embed hides the preview banner). Live updates use the same localStorage `storage` event. Frame is sized to the chosen device and CSS-scaled to fit (`sizePhone`). The frame is blanked when leaving Students.
+- Publish button is a disabled placeholder until session 3.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):

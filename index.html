@@ -11,15 +11,19 @@
 <header class="topbar">
   <div class="brand">Drill Writer</div>
   <input id="showTitle" class="title-input" aria-label="Show title" value="Untitled Show">
+  <nav class="modes" role="tablist" aria-label="Mode">
+    <button id="modeWrite" class="on" data-mode="write" title="Write and edit drill">Write</button>
+    <button id="modeRehearse" data-mode="rehearse" title="Run reps with count-off and click (R)">Rehearse</button>
+    <button id="modeStudents" data-mode="students" title="What students see — and, soon, publishing">Students</button>
+  </nav>
   <div class="top-actions">
-    <button id="btnUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶ Undo</button>
-    <button id="btnRedo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button>
-    <span class="top-sep"></span>
+    <span class="write-only"><button id="btnUndo" title="Undo (Ctrl+Z)" aria-label="Undo">↶ Undo</button>
+    <button id="btnRedo" title="Redo (Ctrl+Y)" aria-label="Redo">↷</button></span>
+    <span class="top-sep write-only"></span>
     <button id="btnNew" title="Start a new show">New</button>
     <button id="btnOpen" title="Open a saved show file (.json)">Open</button>
     <button id="btnSave" title="Download this show as a file">Save</button>
     <button id="btnSample" title="Load a sample show to try things out">Sample</button>
-    <button id="btnStudent" title="See what a student sees on their phone (opens a new tab)">Student view</button>
     <select id="hashSelect" title="Hash marks"></select>
     <button id="btnTheme" title="Toggle light/dark">◐</button>
     <input id="fileInput" type="file" accept=".json,application/json" hidden>
@@ -136,42 +140,6 @@
       </div>
     </div>
 
-    <div class="panel" id="tab-rehearse">
-      <div class="drop-head"><h3>Rehearse</h3>
-        <p class="help">Run a range of sets with a count-off and click track. Use one device and a speaker for the whole band.</p></div>
-      <div class="prop-edit" style="border:0;padding:0">
-        <label>From set <select id="rhFrom"></select></label>
-        <label>To set <select id="rhTo"></select></label>
-        <label>Tempo <span class="rh-tempo"><input id="rhPct" type="range" min="50" max="120" step="5" value="100"><span id="rhPctLabel">100%</span></span></label>
-      </div>
-      <div class="row"><button id="rhGo" class="primary rh-go">▶ Go</button><button id="rhStop">■ Stop</button></div>
-      <p id="rhStatus" class="help"></p>
-
-      <details open><summary>Count-off</summary>
-        <div class="prop-edit" style="border:0;padding:0">
-          <label>Pattern <select id="rhPreset"></select></label>
-          <div class="beats" id="rhBeats" aria-label="Count-off beats: tap to cycle off / on / accent"></div>
-          <label>Sound <select id="rhCountSound"></select></label>
-          <button id="rhPreview">Hear count-off</button>
-        </div>
-      </details>
-      <details open><summary>Click track &amp; reps</summary>
-        <div class="prop-edit" style="border:0;padding:0">
-          <label class="chk"><input id="rhClickOn" type="checkbox"> Click on every count</label>
-          <label>Click sound <select id="rhClickSound"></select></label>
-          <label class="chk"><input id="rhAccent" type="checkbox"> Accent the first count of each set</label>
-          <label>Volume <input id="rhVol" type="range" min="0" max="1" step="0.05"></label>
-          <label class="chk"><input id="rhRepeat" type="checkbox"> Repeat automatically</label>
-          <label>Seconds between reps <input id="rhGap" type="number" min="1" max="120"></label>
-          <label class="chk"><input id="rhBig" type="checkbox"> Big count display</label>
-          <label>Big count shows <select id="rhCountMode"><option value="up">Count up (5 /16)</option><option value="down">Counts left (12 left)</option></select></label>
-          <label class="chk"><input id="rhBigPlay" type="checkbox"> Also show it during normal ▶ Play</label>
-          <label>Speaker delay (ms) <input id="rhDelay" type="number" min="0" max="1000" step="10" title="Bluetooth speakers play late — raise this until the drill lines up with what you hear"></label>
-        </div>
-      </details>
-      <p class="help">Bluetooth speaker? Raise <em>Speaker delay</em> until the dots move with the click you hear (often 150–300 ms).</p>
-    </div>
-
     <div class="panel" id="tab-drop">
       <div id="dropBody"></div>
     </div>
@@ -197,6 +165,63 @@
       <div id="dotInfo"><p class="help">Select one performer to see their coordinates for every set.</p></div>
     </div>
   </aside>
+
+    <aside class="rehearse-panel" id="tab-rehearse">
+      <div class="drop-head"><h3>Rehearse</h3>
+        <p class="help">One device + a speaker runs reps for the band. Pick the sets here or on the timeline (click = From, Shift-click = To). Space = Go / Stop.</p></div>
+      <div class="prop-edit" style="border:0;padding:0">
+        <label>From set <select id="rhFrom"></select></label>
+        <label>To set <select id="rhTo"></select></label>
+        <label>Tempo <span class="rh-tempo"><input id="rhPct" type="range" min="50" max="120" step="5" value="100"><span id="rhPctLabel">100%</span></span></label>
+        <label class="chk"><input id="rhRepeat" type="checkbox"> Repeat automatically</label>
+        <label>Seconds between reps <input id="rhGap" type="number" min="1" max="120"></label>
+      </div>
+      <div class="row rh-go-row"><button id="rhGo" class="primary rh-go">▶ Go</button><button id="rhStop" class="rh-stop">■ Stop</button></div>
+      <p id="rhStatus" class="help"></p>
+
+      <details><summary>Count-off</summary>
+        <div class="prop-edit" style="border:0;padding:0">
+          <label>Pattern <select id="rhPreset"></select></label>
+          <div class="beats" id="rhBeats" aria-label="Count-off beats: tap to cycle off / on / accent"></div>
+          <label>Sound <select id="rhCountSound"></select></label>
+          <button id="rhPreview">Hear count-off</button>
+        </div>
+      </details>
+      <details><summary>Click track, reps &amp; display</summary>
+        <div class="prop-edit" style="border:0;padding:0">
+          <label class="chk"><input id="rhClickOn" type="checkbox"> Click on every count</label>
+          <label>Click sound <select id="rhClickSound"></select></label>
+          <label class="chk"><input id="rhAccent" type="checkbox"> Accent the first count of each set</label>
+          <label>Volume <input id="rhVol" type="range" min="0" max="1" step="0.05"></label>
+          <label class="chk"><input id="rhBig" type="checkbox"> Big count display</label>
+          <label>Big count shows <select id="rhCountMode"><option value="up">Count up (5 /16)</option><option value="down">Counts left (12 left)</option></select></label>
+          <label class="chk"><input id="rhBigPlay" type="checkbox"> Also show it during normal ▶ Play</label>
+          <label>Speaker delay (ms) <input id="rhDelay" type="number" min="0" max="1000" step="10" title="Bluetooth speakers play late — raise this until the drill lines up with what you hear"></label>
+        </div>
+      </details>
+      <p class="help">Bluetooth speaker? Raise <em>Speaker delay</em> until the dots move with the click you hear (often 150–300 ms).</p>
+    </aside>
+
+  <!-- Students mode -->
+  <section class="students-main" id="studentsMain">
+    <div class="phone-wrap" id="phoneWrap"><div class="phone" id="phone"><iframe id="studentFrame" title="Student view preview"></iframe></div></div>
+    <aside class="students-side">
+      <h3>Students</h3>
+      <p class="help">This is exactly what a student sees on their phone. It updates as you edit in Write.</p>
+      <div class="prop-edit" style="border:0;padding:0">
+        <label>Preview as <select id="stuWho"></select></label>
+        <label>Device <select id="stuDevice">
+          <option value="390x844">iPhone (390 × 844)</option><option value="412x915">Android (412 × 915)</option>
+          <option value="375x667">Small phone (375 × 667)</option><option value="768x1024">Tablet (768 × 1024)</option></select></label>
+      </div>
+      <div class="row"><button id="stuOpen">Open in a new tab</button><button id="stuPick">Show the ID picker</button></div>
+      <div class="publish-soon">
+        <h4>Publish for students <span class="soon">coming next</span></h4>
+        <p class="help">One link and QR code for the whole band. Students tap it once on Wi-Fi; drill and music then work on the field with no signal, on iPhone and Android. Music is encrypted so it isn't public.</p>
+        <button disabled>Publish…</button>
+      </div>
+    </aside>
+  </section>
 </main>
 
 <footer class="transport">
@@ -213,7 +238,6 @@
   <input id="scrub" class="sr-only" type="range" min="0" max="0" step="0.01" value="0" aria-label="Timeline position">
   <span id="countReadout" class="readout">Set 1</span>
   <label class="bpm">Tempo <input id="bpm" type="number" min="40" max="240" value="144"></label>
-  <button id="btnRehearse" title="Run reps with a count-off and click track (R)">Rehearse</button>
   <label class="chk"><input id="optGhost" type="checkbox" checked> Paths</label>
   <label class="chk"><input id="optLabels" type="checkbox" checked> Labels</label>
   </div>

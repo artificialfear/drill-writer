@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.0 — 2026-11-07
+- **Write · Rehearse · Students** modes in the top bar.
+  - **Write** is the editor, as before.
+  - **Rehearse** (or press R) clears away every editing tool: big field, big count, and a side panel with From / To, tempo, repeat, and a large Go / Stop. Click a set on the timeline to make it From, Shift-click for To; the chosen range is underlined. Dragging the field pans, so nothing can be moved by accident on a tablet. Count-off and click settings are folded away below.
+  - **Students** shows the real student view inside a phone frame (iPhone, Android, small phone or tablet sizes), as any performer, updating live as you edit. "Open in a new tab" and "Show the ID picker" are there too, plus a placeholder for Publish for students (next).
+- The Student view and Rehearse buttons moved into the modes. Undo/Redo only show in Write.
+
 ## 0.8.2 — 2026-11-07
 - Play / Space now starts at the beginning of the selected set's move: on set 5 it plays the counts into set 5 (from set 4), matching that set's block on the timeline, then keeps going. Before, pressing play on the last set jumped back to set 1. Paused in the middle of a move, it just continues. Same in the student view.
 

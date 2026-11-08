@@ -205,3 +205,40 @@ details summary { cursor: pointer; font-weight: 600; margin: 6px 0; }
   .sidebar { border-left: 0; border-top: 1px solid var(--line); max-height: none; }
   .readout { min-width: 0; }
 }
+
+/* ---------- modes: Write · Rehearse · Students ---------- */
+.modes { display: flex; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.modes button { border: 0; border-radius: 0; min-width: 84px; font-weight: 600; background: transparent; }
+.modes button + button { border-left: 1px solid var(--line); }
+.modes button.on { background: var(--accent); color: var(--accent-ink); }
+.rehearse-panel, .students-main { display: none; }
+body[data-mode="rehearse"] .layout { grid-template-columns: 1fr 330px; }
+body[data-mode="rehearse"] .toolbar, body[data-mode="rehearse"] .sidebar, body[data-mode="rehearse"] .write-only,
+body[data-mode="rehearse"] .tp-row #btnPrevSet, body[data-mode="rehearse"] .tp-row #btnPlay, body[data-mode="rehearse"] .tp-row #btnNextSet,
+body[data-mode="rehearse"] .tl-add { display: none; }
+body[data-mode="rehearse"] .rehearse-panel { display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; border-left: 1px solid var(--line); background: var(--panel); }
+body[data-mode="rehearse"] #field { cursor: grab; }
+.rh-go-row button { flex: 1; min-height: 52px; font-size: 18px; font-weight: 700; }
+.tl-block.in-range { box-shadow: inset 0 -4px 0 var(--select); }
+.tl-block.range-from { box-shadow: inset 0 -4px 0 var(--select), inset 3px 0 0 var(--select); }
+body[data-mode="students"] .layout { grid-template-columns: 1fr; }
+body[data-mode="students"] .toolbar, body[data-mode="students"] .stage, body[data-mode="students"] .sidebar,
+body[data-mode="students"] .transport, body[data-mode="students"] .write-only { display: none; }
+body[data-mode="students"] .students-main { display: grid; grid-template-columns: 1fr 320px; min-height: 0; }
+.phone-wrap { display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 16px; min-height: 0; }
+.phone { border: 10px solid #111; border-radius: 34px; overflow: hidden; background: #000; box-shadow: 0 10px 40px rgba(0,0,0,.35); transform-origin: center center; flex: none; }
+.phone iframe { border: 0; display: block; width: 100%; height: 100%; background: var(--bg); }
+.students-side { border-left: 1px solid var(--line); background: var(--panel); padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.students-side h3 { margin: 0; }
+.publish-soon { border: 1px dashed var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.publish-soon h4 { margin: 0; display: flex; gap: 6px; align-items: center; }
+.soon { font-size: 11px; font-weight: 600; color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 1px 8px; }
+@media (max-width: 1000px) {
+  body[data-mode="rehearse"] .layout, body[data-mode="students"] .students-main { grid-template-columns: 1fr; }
+  body[data-mode="rehearse"] .rehearse-panel { border-left: 0; border-top: 1px solid var(--line); }
+  body[data-mode="rehearse"] .stage { height: 50vh; }
+  body[data-mode="rehearse"] { display: flex; flex-direction: column; }
+  body[data-mode="rehearse"] .transport { order: 0; }
+  .students-side { border-left: 0; border-top: 1px solid var(--line); }
+  .phone-wrap { height: 78vh; }
+}

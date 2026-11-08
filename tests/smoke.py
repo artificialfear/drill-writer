@@ -216,7 +216,7 @@ with sync_playwright() as p:
     for i in (1, 2):
         ti = page.locator('#setList li').nth(i).locator('.tempo-in'); ti.fill('300'); ti.press('Enter')
     check('per-set tempo saved', page.evaluate('__dw.show.sets[1].bpm === 300 && __dw.show.sets[2].bpm === 300'))
-    page.click('#btnRehearse')
+    page.click('#modeRehearse')
     check('rehearse panel opens', page.is_visible('#rhGo'))
     check('default count-off is 1 . 3 . 1 2 3 4', page.evaluate('JSON.stringify(__rh.settings.beats)') == '[2,0,1,0,2,1,1,1]')
     page.evaluate("(()=>{for (const [id,v] of [['#rhFrom','0'],['#rhTo','2']]) { const s=document.querySelector(id); s.value=v; s.dispatchEvent(new Event('change')); }})()")
@@ -237,6 +237,17 @@ with sync_playwright() as p:
     # stop mid-run
     page.click('#rhGo'); page.wait_for_timeout(2500); page.click('#rhStop')
     check('stop button stops the rep', not page.evaluate('__rh.engine.running') and not page.evaluate('__dw.playing'))
+    check('Rehearse mode hides the editing tools', not page.is_visible('.toolbar') and not page.is_visible('.sidebar') and page.is_visible('#rhGo'))
+    page.locator('#tlTrack .tl-block').nth(1).click()
+    check('timeline click sets From in Rehearse', page.input_value('#rhFrom') == '1')
+    page.screenshot(path=f'{SHOTS}/14-rehearse-mode.png')
+    page.click('#modeStudents'); page.wait_for_timeout(1500)
+    fr = page.frame_locator('#studentFrame')
+    check('Students mode shows the phone preview', fr.locator('#whoLabel').inner_text() != '' and not fr.locator('#previewBanner').is_visible())
+    page.screenshot(path=f'{SHOTS}/15-students-mode.png')
+    page.select_option('#stuDevice', '768x1024'); page.wait_for_timeout(300)
+    page.click('#modeWrite')
+    check('back in Write the tools return', page.is_visible('.toolbar') and page.is_visible('.sidebar'))
     page.click('.tab[data-tab=sets]')
 
     # 3D view

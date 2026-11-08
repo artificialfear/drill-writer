@@ -508,7 +508,7 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
   const w = toWorld(px, py);
-  if (state.tool === 'pan' || e.button === 1 || e.button === 2) {
+  if (state.tool === 'pan' || e.button === 1 || e.button === 2 || state.appMode === 'rehearse') {
     state.pointer = { kind: 'pan', px, py, ox: state.view.ox, oy: state.view.oy };
     canvas.style.cursor = 'grabbing';
     return;
@@ -1181,6 +1181,7 @@ function updatePlayhead() {
     const i = +b.dataset.i;
     b.classList.toggle('current', sitting ? i === state.cur : i === L.i + 1);
     b.classList.toggle('next', !sitting && i === L.i);
+    b.classList.toggle('in-range', state.appMode === 'rehearse' && !!rhRange && i > rhRange.from && i <= rhRange.to);
   });
 }
 function countAtX(clientX) {
@@ -1210,7 +1211,7 @@ function wireTimeline() {
   let g = null;
   track.addEventListener('pointerdown', e => {
     track.setPointerCapture(e.pointerId);
-    const edge = e.target.closest('.tl-edge');
+    const edge = state.appMode === 'write' ? e.target.closest('.tl-edge') : null;
     if (edge) {
       if (dropLocked()) return toast('Finish or cancel the drop first.');
       const i = +edge.dataset.edge, b = blockEl(i), st = state.show.sets[i];
@@ -1219,7 +1220,7 @@ function wireTimeline() {
       return;
     }
     const blk = e.target.closest('.tl-block');
-    g = { kind: 'press', x0: e.clientX, i: blk ? +blk.dataset.i : null };
+    g = { kind: 'press', x0: e.clientX, i: blk ? +blk.dataset.i : null, shift: e.shiftKey };
   });
   track.addEventListener('pointermove', e => {
     if (!g) return;
@@ -1236,12 +1237,13 @@ function wireTimeline() {
       }
       return;
     }
-    if (g.kind === 'press' && Math.abs(e.clientX - g.x0) > 4) g.kind = 'scrub';
+    if (g.kind === 'press' && Math.abs(e.clientX - g.x0) > 4 && state.appMode === 'write') g.kind = 'scrub';
     if (g.kind === 'scrub') scrubTo(countAtX(e.clientX));
   });
   const end = () => {
     if (!g) return;
     if (g.kind === 'edge') { g.edge.classList.remove('drag'); if (g.changed) changed(); }
+    else if (g.kind === 'press' && g.i != null && state.appMode === 'rehearse') pickRehearseRange(g.i, g.shift);
     else if (g.kind === 'press' && g.i != null) goToSet(g.i);
     else if (g.kind === 'scrub') { renderSets(); }
     g = null;
@@ -1257,9 +1259,9 @@ function updateSelBar() {
   const bar = $('selBar'), qs = $('quickSel');
   if (!bar) return;
   const g = state.pointer;
-  const busy = state.mode === '3d' || state.playing || dropLocked() || (g && ['drag', 'marquee', 'line', 'pan', 'pinch'].includes(g.kind));
+  const busy = state.appMode !== 'write' || state.mode === '3d' || state.playing || dropLocked() || (g && ['drag', 'marquee', 'line', 'pan', 'pinch'].includes(g.kind));
   const ids = selIds();
-  qs.hidden = state.mode === '3d' || state.playing || !!ids.length || !state.show.performers.length || dropLocked();
+  qs.hidden = state.appMode !== 'write' || state.mode === '3d' || state.playing || !!ids.length || !state.show.performers.length || dropLocked();
   if (busy || !ids.length) { bar.hidden = true; return; }
   bar.hidden = false;
   $('selCount').textContent = ids.length === 1 ? (state.show.performers.find(p => p.id === ids[0]) || {}).label : `${ids.length} selected`;
@@ -1296,7 +1298,7 @@ const RH_KEY = 'drillwriter.rehearse';
 let rh = { ...DEFAULT_SETTINGS };
 try { rh = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(RH_KEY) || '{}') }; } catch (e) {}
 const saveRh = () => { try { localStorage.setItem(RH_KEY, JSON.stringify(rh)); } catch (e) {} };
-const rehearseOpen = () => $('tab-rehearse').classList.contains('active');
+const rehearseOpen = () => state.appMode === 'rehearse';
 let rhRange = null; // {from, to}
 
 const rehearsal = createRehearsal({
@@ -1424,15 +1426,65 @@ function updatePctLabel() {
   const bpm = Math.round((st.bpm || state.show.tempo.bpm) * rh.tempoPct / 100);
   $('rhPctLabel').textContent = `${rh.tempoPct}% · ♩=${bpm}`;
 }
-function toggleRehearse(force) {
-  const open = force ?? !rehearseOpen();
-  if (open) {
-    if (dropLocked()) return toast('Finish or cancel the drop first.');
-    if (state.show.sets.length < 2) return toast('Add a second set to run reps.');
+// ---------------- App modes: Write · Rehearse · Students ----------------
+function setAppMode(mode) {
+  if (mode === state.appMode) return;
+  if (dropLocked()) return toast('Finish or cancel the drop first.');
+  if (mode === 'rehearse' && state.show.sets.length < 2) return toast('Add a second set to run reps.');
+  if (mode === 'students' && !state.show.performers.length) return toast('Add performers first.');
+  if (state.playing) pause();
+  if (state.tool !== 'select') setTool('select');
+  state.appMode = mode;
+  document.body.dataset.mode = mode;
+  document.querySelectorAll('.modes button').forEach(b => b.classList.toggle('on', b.dataset.mode === mode));
+  if (mode === 'rehearse') {
     rhRange = { from: Math.min(state.cur, state.show.sets.length - 2), to: state.show.sets.length - 1 };
-    showTab('rehearse'); renderRehearse();
-  } else { if (rehearsal.running) pause(); showTab('sets'); }
-  $('btnRehearse').classList.toggle('on', open);
+    renderRehearse();
+    $('hudHint').textContent = 'Rehearse: drag to pan · scroll to zoom · editing is off · Space = Go / Stop';
+    $('hudCoord').textContent = '';
+  } else if (mode === 'students') {
+    renderStudentsMode();
+  } else {
+    $('hudHint').textContent = state.mode === '3d' ? HINT_3D : (toolHints[state.tool] || '');
+  }
+  if (mode !== 'students') $('studentFrame').src = 'about:blank'; // stop the preview's work while hidden
+  renderTimeline(); updateSelBar();
+  requestAnimationFrame(() => { resize(); draw(); });
+}
+// timeline in Rehearse: click a set = From, Shift-click = To
+function pickRehearseRange(i, isTo) {
+  const n = state.show.sets.length;
+  if (rehearsal.running) pause();
+  if (isTo) { if (i <= rhRange.from) return toast('“To” has to be a later set than “From”.'); rhRange.to = i; }
+  else { rhRange.from = Math.min(i, n - 2); if (rhRange.to <= rhRange.from) rhRange.to = Math.min(n - 1, rhRange.from + 1); }
+  $('rhFrom').value = rhRange.from; $('rhTo').value = rhRange.to;
+  goToSet(rhRange.from); updatePctLabel(); updatePlayhead();
+}
+const toggleRehearse = () => setAppMode(state.appMode === 'rehearse' ? 'write' : 'rehearse');
+
+// Students mode: the real student page in a phone-sized frame, live-updating from this editor
+function renderStudentsMode() {
+  const who = $('stuWho');
+  const sorted = [...state.show.performers].sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  const want = who.value && sorted.some(p => p.id === who.value) ? who.value : (selIds()[0] || sorted[0].id);
+  who.innerHTML = sorted.map(p => `<option value="${p.id}">${escapeHtml(p.label)} — ${sectionByKey(p.section).name}</option>`).join('');
+  who.value = want;
+  loadStudentFrame();
+}
+function loadStudentFrame(pick) {
+  clearTimeout(saveTimer);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state.show)); } catch (e) {}
+  const id = $('stuWho').value;
+  $('studentFrame').src = `student.html?embed=1&preview=1&set=${state.cur}${pick ? '' : `&id=${encodeURIComponent(id)}`}&t=${Date.now()}`;
+  sizePhone();
+}
+function sizePhone() {
+  const [w, h] = $('stuDevice').value.split('x').map(Number);
+  const phone = $('phone'), wrap = $('phoneWrap');
+  phone.style.width = `${w + 20}px`; phone.style.height = `${h + 20}px`;
+  const avail = wrap.getBoundingClientRect();
+  const k = Math.min(1, (avail.width - 32) / (w + 20), (avail.height - 32) / (h + 20));
+  phone.style.transform = `scale(${Math.max(0.3, k)})`;
 }
 function startRehearsal() {
   const from = +$('rhFrom').value, to = +$('rhTo').value;
@@ -1444,11 +1496,10 @@ function startRehearsal() {
     accentSets: rh.accentSets, volume: rh.volume, tempoPct: rh.tempoPct, repeat: rh.repeat, repeatGap: rh.repeatGap, delayMs: rh.delayMs });
 }
 function wireRehearse() {
-  $('btnRehearse').onclick = () => toggleRehearse();
   $('rhGo').onclick = startRehearsal;
   $('rhStop').onclick = () => pause();
   $('rhFrom').onchange = ev => { rhRange.from = +ev.target.value; if (rhRange.to <= rhRange.from) { rhRange.to = Math.min(state.show.sets.length - 1, rhRange.from + 1); $('rhTo').value = rhRange.to; } goToSet(rhRange.from); updatePctLabel(); };
-  $('rhTo').onchange = ev => { rhRange.to = +ev.target.value; };
+  $('rhTo').onchange = ev => { rhRange.to = +ev.target.value; updatePlayhead(); };
   $('rhPct').oninput = ev => { rh.tempoPct = +ev.target.value; updatePctLabel(); saveRh(); };
   $('rhPreset').onchange = ev => { rh.preset = ev.target.value; if (COUNTOFF_PRESETS[rh.preset]) rh.beats = [...COUNTOFF_PRESETS[rh.preset].beats]; saveRh(); renderBeats(); };
   $('rhCountSound').onchange = ev => { rh.countSound = ev.target.value; saveRh(); };
@@ -1466,7 +1517,6 @@ function wireRehearse() {
     const from = +$('rhFrom').value || 0, st = state.show.sets[Math.min(from + 1, state.show.sets.length - 1)];
     rehearsal.preview(rh.beats, rh.countSound, rh.volume, (st.bpm || state.show.tempo.bpm) * rh.tempoPct / 100);
   };
-  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => $('btnRehearse').classList.remove('on')));
 }
 window.__rh = { get engine() { return rehearsal; }, get settings() { return rh; } };
 
@@ -1541,7 +1591,12 @@ function init() {
   wireTimeline();
   $('sbDrop').onclick = startDrop;
   $('sbPreview').onclick = () => openStudentView();
-  $('btnStudent').onclick = () => openStudentView();
+  document.querySelectorAll('.modes button').forEach(b => b.onclick = () => setAppMode(b.dataset.mode));
+  $('stuWho').onchange = () => loadStudentFrame();
+  $('stuDevice').onchange = sizePhone;
+  $('stuOpen').onclick = () => openStudentView($('stuWho').value);
+  $('stuPick').onclick = () => loadStudentFrame(true);
+  window.addEventListener('resize', () => { if (state.appMode === 'students') sizePhone(); });
   $('btnRenumber').onclick = renumber;
   $('btnAddProp').onclick = () => addProp($('addPropKind').value);
 
@@ -1588,6 +1643,7 @@ function init() {
     if (mod) return;
     if (k === ' ') { e.preventDefault(); if (rehearseOpen()) { rehearsal.running ? pause() : startRehearsal(); } else state.playing ? pause() : play(); return; }
     if (k.toLowerCase() === 'r' && !e.shiftKey) { toggleRehearse(); return; }
+    if (state.appMode !== 'write') { if (k === 'Escape' && state.appMode === 'students') setAppMode('write'); return; }
     if (k === 'Escape') { state.arcPts = []; state.sel.clear(); state.selProp = null; setTool('select'); selectionChanged(); return; }
     const step = e.shiftKey ? 4 : 1;
     if (k === 'ArrowLeft') { e.preventDefault(); nudge(-step, 0); return; }
@@ -1607,6 +1663,7 @@ function init() {
   try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) {}
   loadShow(saved && saved.app === 'drill-writer' ? saved : newShow());
   state.mode = '2d';
+  state.appMode = 'write'; document.body.dataset.mode = 'write';
   setTool('select');
   resize();
   try { if (localStorage.getItem(VIEW_KEY) === '3d') setMode('3d'); } catch (e) {}

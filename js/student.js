@@ -410,7 +410,7 @@ function wire() {
     if (e.key === ' ') { e.preventDefault(); st.playing ? (stopAll(), render()) : play(); }
   });
   if (PREVIEW) {
-    $('previewBanner').hidden = false;
+    $('previewBanner').hidden = params.has('embed'); // inside the editor's Students mode the frame says enough
     $('pvClose').onclick = () => { if (window.opener) window.close(); else location.href = 'index.html'; };
     // live-update while the editor (another tab) changes the show
     window.addEventListener('storage', e => {
