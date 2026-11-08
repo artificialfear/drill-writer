@@ -198,8 +198,8 @@ function instrument(key, opts = {}) {
       g.push(paint(new THREE.TorusGeometry(0.5, 0.065, 8, 26).rotateX(Math.PI / 2).rotateZ(0.78).translate(-0.02, 2.02, 0), COL.brass));
       g.push(box(V(-0.17, 2.17, 0.36), 0.12, 0.2, 0.12, COL.brass));
       g.push(tube(MOUTH, V(-0.1, 2.5, 0.34), 0.02, COL.brass));
-      g.push(tube(V(0.32, 2.52, -0.05), V(0.08, 3.38, -0.24), 0.08, COL.brass));
-      g.push(bell(V(0.06, 3.4, -0.24), V(0, 0.2, 1), 0.48, 0.09, 0.47, COL.brass));
+      g.push(tube(V(0.32, 2.52, -0.05), V(0.08, 3.52, -0.26), 0.08, COL.brass));
+      g.push(bell(V(0.06, 3.55, -0.26), V(0, 0.2, 1), 0.48, 0.09, 0.47, COL.brass)); // clears the shako
       hands = { L: V(-0.18, 2.2, 0.42), R: V(0.36, 2.22, 0.22) };
       break;
     }
@@ -347,7 +347,8 @@ function upperBody(sec, tone, opts = {}) {
     const s = dm ? 1.25 : 1;
     const feathers = [[0, 0.06, 0.1, 0.07, COL.black], [0, 0.16, 0.06, 0.1, COL.tealDark], [0.05, 0.28, 0.0, 0.11, COL.teal], [-0.05, 0.3, 0.01, 0.11, COL.teal],
       [0, 0.42, -0.06, 0.12, COL.tealLight], [0.04, 0.54, -0.12, 0.1, COL.teal], [-0.03, 0.62, -0.17, 0.08, COL.tealLight]];
-    for (const [x, y, z, r, col] of feathers) hd.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
+    // sousaphone players wear the shako without a plume (it would hit the bell), like they do for real
+    if (sec.key !== 'tuba') for (const [x, y, z, r, col] of feathers) hd.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
   }
   // arms (black sleeves) from shoulders to hands
   const ins = instrument(sec.key, opts);

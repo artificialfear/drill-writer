@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.17.1 — 2026-11-08
+- Sousaphone players wear the shako without a plume, as they do for real, so nothing pokes into the bell. The bell also sits a little higher so it clears the top of the shako.
+
 ## 0.17.0 — 2026-11-08
 - **Color guard uniform** to match this year's guard:
   - Top: fitted black sleeveless mock-neck, with bare arms.
