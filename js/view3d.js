@@ -78,19 +78,34 @@ const HIP = 1.45, THIGH = 0.71, SHIN = 0.66, ANKLE = 0.08, LEG = THIGH + SHIN;
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const UP = V(0, 1, 0);
 
+// Band uniform: black jacket with a teal yoke and shoulder pads, a silver diagonal band, black pants,
+// teal shako with silver trim and a teal feather plume. Everyone wears the same uniform.
 const COL = {
-  pants: '#1c1e24', shoe: '#0c0c0e', glove: '#f4f4f2', shako: '#17181c', gold: '#d4ad45', brass: '#d6ae48',
-  silver: '#cfd5da', black: '#141414', white: '#f2f2f0', wood: '#7a5233', stick: '#e4cfa4', chrome: '#b9c0c6'
+  teal: '#1fa3a6', tealDark: '#147b7e', tealLight: '#4cc4c4', black: '#121315', silver: '#c9ced3',
+  pants: '#141518', shoe: '#0a0a0b', visor: '#0b0b0c', brass: '#d6ae48', bronze: '#c9a24a',
+  flute: '#d3d8dc', white: '#f2f2f0', head: '#e9e9e4', wood: '#7a5233', stick: '#e4cfa4', chrome: '#c3c9ce',
+  shell: '#16171a', felt: '#f3f3f0'
 };
 const SKIN = ['#f1c9a8', '#e2ae86', '#c78d60', '#9b6943', '#6c4630'];
 const HAIR = ['#2b1d14', '#4a3020', '#161616', '#6b4a2b', '#b8894f'];
 
-// colour every vertex of a geometry (merged meshes use vertex colours instead of separate materials)
+// colour every vertex of a geometry (merged meshes use vertex colours instead of separate materials).
+// `color` can be a function of a triangle's centre (x, y, z) → colour, for patterned pieces like the jacket.
 function paint(g, color) {
   if (g.index) g = g.toNonIndexed();
   for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
-  const c = new THREE.Color(color), n = g.attributes.position.count, a = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
+  const n = g.attributes.position.count, a = new Float32Array(n * 3), p = g.attributes.position.array;
+  const fixed = typeof color === 'function' ? null : new THREE.Color(color), cache = new Map();
+  for (let t = 0; t < n; t += 3) {
+    let c = fixed;
+    if (!c) {
+      const cx = (p[t * 3] + p[t * 3 + 3] + p[t * 3 + 6]) / 3, cy = (p[t * 3 + 1] + p[t * 3 + 4] + p[t * 3 + 7]) / 3, cz = (p[t * 3 + 2] + p[t * 3 + 5] + p[t * 3 + 8]) / 3;
+      const hex = color(cx, cy, cz);
+      if (!cache.has(hex)) cache.set(hex, new THREE.Color(hex));
+      c = cache.get(hex);
+    }
+    for (let k = 0; k < 3 && t + k < n; k++) { a[(t + k) * 3] = c.r; a[(t + k) * 3 + 1] = c.g; a[(t + k) * 3 + 2] = c.b; }
+  }
   g.setAttribute('color', new THREE.BufferAttribute(a, 3));
   return g;
 }
@@ -113,113 +128,130 @@ function bell(base, dir, len, rT, rM, col) {
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(UP, dir.clone().normalize()));
   return paint(g.translate(base.x, base.y, base.z), col);
 }
-// a drum: shell (open band) + white heads + hoops. axis 'y' = snare/tenor, 'x' = bass drum
-function drum(c, r, h, shell, axis = 'y') {
+// a drum: black shell, white heads, chrome hoops + lugs. axis 'y' = snare/tenor (heads up), 'x' = bass drum (heads to the sides)
+function drum(c, r, h, axis = 'y', head = COL.head) {
   const turn = g => axis === 'x' ? g.rotateZ(Math.PI / 2) : g;
   const at = g => g.translate(c.x, c.y, c.z);
   const out = [
-    paint(at(turn(new THREE.CylinderGeometry(r * 0.985, r * 0.985, h * 1.02, 20))), COL.white),
-    paint(at(turn(new THREE.CylinderGeometry(r, r, h * 0.8, 20, 1, true))), shell)
+    paint(at(turn(new THREE.CylinderGeometry(r * 0.98, r * 0.98, h, 24))), head),
+    paint(at(turn(new THREE.CylinderGeometry(r, r, h * 0.9, 24, 1, true))), COL.shell)
   ];
   for (const s of [-1, 1]) {
-    const hoop = new THREE.TorusGeometry(r, 0.022, 5, 22).rotateX(Math.PI / 2).translate(0, s * h / 2, 0);
+    const hoop = new THREE.TorusGeometry(r, 0.024, 5, 26).rotateX(Math.PI / 2).translate(0, s * h * 0.47, 0);
     out.push(paint(at(turn(hoop)), COL.chrome));
+  }
+  // tension rods down the shell
+  const rods = Math.max(6, Math.round(r * 32));
+  for (let k = 0; k < rods; k++) {
+    const a = k / rods * Math.PI * 2;
+    const rod = new THREE.CylinderGeometry(0.009, 0.009, h * 0.9, 4).translate(Math.cos(a) * (r + 0.012), 0, Math.sin(a) * (r + 0.012));
+    out.push(paint(at(turn(rod)), COL.chrome));
   }
   return out;
 }
+// a stick held in the hand: a little of the butt end shows behind the hand, the tip points at `tip`
+function stick(hand, tip, col = COL.stick, r = 0.013) {
+  const d = tip.clone().sub(hand).normalize();
+  const butt = hand.clone().addScaledVector(d, -0.13);
+  return [tube(butt, tip, r, col, 6), ball(tip, r * 1.5, col)];
+}
 
-const SH = { L: V(-0.3, 2.43, 0), R: V(0.3, 2.43, 0) };
+// Marcher's own right is −X (the front of a marcher faces +Z, toward the audience).
+const SH = { L: V(-0.3, 2.43, 0), R: V(0.3, 2.43, 0) }; // L = the shoulder on −X (marcher's right), R = +X
 const MOUTH = V(0, 2.7, 0.2);
+const BASS_R = [0.4, 0.44, 0.49, 0.53, 0.58]; // bass 1–5: about 18", 20", 22", 24", 26"
 
-// Instrument + where the hands go, per section. Front of the marcher is +Z.
-function instrument(key, shell) {
+// Instrument + where the hands go, per section.
+function instrument(key, opts = {}) {
   const g = [];
   let hands, elbows = null;
-  const brassHorn = (s, bellR, reach, col = COL.brass) => {
+  const brassHorn = (s, bellR, reach) => {
     const end = V(0, 2.74, 0.3 + reach);
-    g.push(tube(MOUTH, end, 0.022 * s, col));
-    g.push(tube(V(0, 2.6, 0.32), V(0, 2.6, 0.18 + reach * 0.9), 0.022 * s, col));
-    g.push(box(V(0, 2.66, 0.44), 0.07 * s, 0.15 * s, 0.13 * s, col));
-    g.push(bell(end, V(0, 0.06, 1), 0.28 * s, 0.03 * s, bellR, col));
-    hands = { L: V(-0.07, 2.66, 0.47), R: V(0.06, 2.7, 0.42) };
+    g.push(tube(MOUTH, end, 0.022 * s, COL.brass));
+    g.push(tube(V(0, 2.6, 0.32), V(0, 2.6, 0.18 + reach * 0.9), 0.022 * s, COL.brass));
+    g.push(box(V(0, 2.66, 0.44), 0.07 * s, 0.15 * s, 0.13 * s, COL.brass));
+    g.push(bell(end, V(0, 0.06, 1), 0.28 * s, 0.03 * s, bellR, COL.brass));
+    hands = { L: V(-0.06, 2.7, 0.42), R: V(0.07, 2.66, 0.47) };
   };
-  const sax = (s, dx) => {
+  const sax = (s, dx) => { // held on the marcher's right side
     const top = V(dx * 0.4, 2.55, 0.3), bot = V(dx, 2.55 - 0.62 * s, 0.3);
     g.push(tube(MOUTH, top, 0.018, COL.brass));
     g.push(paint(between(new THREE.CylinderGeometry(0.05 * s, 0.032 * s, top.distanceTo(bot), 10), top, bot), COL.brass));
-    g.push(ball(bot.clone().add(V(0.04 * s, -0.02, 0)), 0.065 * s, COL.brass));
-    g.push(bell(bot.clone().add(V(0.09 * s, 0, 0)), V(0.25, 1, 0.3), 0.26 * s, 0.05 * s, 0.11 * s, COL.brass));
-    hands = { L: V(dx * 0.45, 2.36, 0.36), R: V(dx * 0.85, 2.55 - 0.48 * s, 0.37) };
+    g.push(ball(bot.clone().add(V(-0.04 * s, -0.02, 0)), 0.065 * s, COL.brass));
+    g.push(bell(bot.clone().add(V(-0.09 * s, 0, 0)), V(-0.25, 1, 0.3), 0.26 * s, 0.05 * s, 0.11 * s, COL.brass));
+    hands = { L: V(dx * 0.85, 2.55 - 0.48 * s, 0.37), R: V(dx * 0.45, 2.36, 0.36) };
   };
   switch (key) {
     case 'trumpet': brassHorn(1, 0.1, 0.32); break;
     case 'mello': brassHorn(1.15, 0.15, 0.38); break;
-    case 'baritone': brassHorn(1.45, 0.17, 0.36); hands.R = V(0.08, 2.66, 0.44); break;
+    case 'baritone': brassHorn(1.45, 0.17, 0.36); hands.L = V(-0.08, 2.66, 0.44); break;
     case 'trombone': {
-      g.push(tube(MOUTH, V(-0.05, 2.76, 0.48), 0.022, COL.brass));
-      g.push(bell(V(-0.05, 2.76, 0.48), V(0, 0.04, 1), 0.32, 0.03, 0.13, COL.brass));
+      g.push(tube(MOUTH, V(0.05, 2.76, 0.48), 0.022, COL.brass));
+      g.push(bell(V(0.05, 2.76, 0.48), V(0, 0.04, 1), 0.32, 0.03, 0.13, COL.brass));
       for (const x of [-0.03, 0.03]) g.push(tube(V(x, 2.62, 0.22), V(x, 2.62, 1.25), 0.014, COL.brass, 6));
       g.push(tube(V(-0.04, 2.62, 1.25), V(0.04, 2.62, 1.25), 0.016, COL.brass, 6));
-      hands = { L: V(-0.07, 2.7, 0.34), R: V(0.07, 2.6, 0.86) };
+      hands = { L: V(-0.07, 2.6, 0.86), R: V(0.07, 2.7, 0.34) }; // right hand on the slide, left holds the bell section
       break;
     }
-    case 'tuba': { // sousaphone: wraps over the left shoulder, bell above the head
-      g.push(paint(new THREE.TorusGeometry(0.5, 0.065, 8, 26).rotateX(Math.PI / 2).rotateZ(-0.78).translate(0.02, 2.02, 0), COL.brass));
-      g.push(box(V(0.17, 2.17, 0.36), 0.12, 0.2, 0.12, COL.brass));
-      g.push(tube(MOUTH, V(0.1, 2.5, 0.34), 0.02, COL.brass));
-      g.push(tube(V(-0.32, 2.52, -0.05), V(-0.08, 3.38, -0.24), 0.08, COL.brass));
-      g.push(bell(V(-0.06, 3.4, -0.24), V(0, 0.2, 1), 0.48, 0.09, 0.47, COL.brass));
-      hands = { L: V(-0.36, 2.22, 0.22), R: V(0.18, 2.2, 0.42) };
+    case 'tuba': { // sousaphone: rests on the left shoulder, valves on the right, bell above the head
+      g.push(paint(new THREE.TorusGeometry(0.5, 0.065, 8, 26).rotateX(Math.PI / 2).rotateZ(0.78).translate(-0.02, 2.02, 0), COL.brass));
+      g.push(box(V(-0.17, 2.17, 0.36), 0.12, 0.2, 0.12, COL.brass));
+      g.push(tube(MOUTH, V(-0.1, 2.5, 0.34), 0.02, COL.brass));
+      g.push(tube(V(0.32, 2.52, -0.05), V(0.08, 3.38, -0.24), 0.08, COL.brass));
+      g.push(bell(V(0.06, 3.4, -0.24), V(0, 0.2, 1), 0.48, 0.09, 0.47, COL.brass));
+      hands = { L: V(-0.18, 2.2, 0.42), R: V(0.36, 2.22, 0.22) };
       break;
     }
-    case 'flute': case 'piccolo': {
+    case 'flute': case 'piccolo': { // played out to the marcher's right
       const len = key === 'flute' ? 0.66 : 0.32;
-      g.push(tube(V(-0.12, 2.71, 0.21), V(-0.12 + len, 2.67, 0.24), 0.016, COL.silver));
-      hands = { L: V(0.0, 2.67, 0.25), R: V(-0.12 + len * 0.72, 2.66, 0.26) };
-      elbows = { L: V(-0.2, 2.35, 0.32), R: V(0.42, 2.38, 0.08) };
+      g.push(tube(V(0.12, 2.71, 0.21), V(0.12 - len, 2.67, 0.24), 0.016, COL.flute));
+      hands = { L: V(0.12 - len * 0.72, 2.66, 0.26), R: V(0.0, 2.67, 0.25) };
+      elbows = { L: V(-0.42, 2.38, 0.08), R: V(0.2, 2.35, 0.32) };
       break;
     }
     case 'clarinet': {
       const end = V(0, 1.98, 0.52);
       g.push(tube(MOUTH, end, 0.026, COL.black));
       g.push(bell(end, end.clone().sub(MOUTH), 0.1, 0.028, 0.06, COL.black));
-      hands = { L: V(0, 2.44, 0.33), R: V(0, 2.18, 0.43) };
+      hands = { L: V(0, 2.18, 0.43), R: V(0, 2.44, 0.33) };
       break;
     }
-    case 'altosax': sax(1, 0.06); break;
-    case 'tenorsax': sax(1.22, 0.12); break;
-    case 'barisax': sax(1.45, 0.2); break;
-    case 'snare': {
-      g.push(...drum(V(0, 1.68, 0.44), 0.3, 0.26, shell));
-      for (const s of [-1, 1]) {
-        g.push(tube(V(s * 0.2, 2.32, 0.16), V(s * 0.16, 1.86, 0.3), 0.022, COL.chrome, 6));
-        g.push(tube(V(s * 0.15, 1.96, 0.33), V(s * 0.05, 1.86, 0.62), 0.012, COL.stick, 5));
-      }
-      hands = { L: V(-0.15, 1.96, 0.33), R: V(0.15, 1.96, 0.33) };
+    case 'altosax': sax(1, -0.06); break;
+    case 'tenorsax': sax(1.22, -0.12); break;
+    case 'barisax': sax(1.45, -0.2); break;
+    case 'snare': { // 14" × 12" marching snare, top head at the belly; sticks in a V meeting near the middle of the head
+      const r = 0.31, h = 0.53, top = 1.84, c = V(0, top - h / 2, 0.2 + r + 0.05);
+      g.push(...drum(c, r, h));
+      for (const s of [-1, 1]) g.push(tube(V(s * 0.13, 2.38, 0.17), V(s * 0.1, 2.02, 0.22), 0.022, COL.chrome, 6));
+      g.push(box(V(0, 2.02, 0.22), 0.26, 0.04, 0.05, COL.chrome), tube(V(0, 2.02, 0.24), V(0, top + 0.02, c.z - r + 0.02), 0.024, COL.chrome, 6));
+      hands = { L: V(-0.29, top + 0.15, 0.36), R: V(0.29, top + 0.15, 0.36) };
+      for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.04, top + 0.035, c.z + 0.06)));
       break;
     }
-    case 'tenors': {
-      for (const [x, z, r] of [[-0.33, 0.36, 0.17], [-0.12, 0.56, 0.15], [0.12, 0.56, 0.15], [0.33, 0.36, 0.17], [0, 0.78, 0.09]])
-        g.push(...drum(V(x, 1.68, z), r, 0.22, shell));
-      for (const s of [-1, 1]) {
-        g.push(tube(V(s * 0.2, 2.32, 0.16), V(s * 0.2, 1.84, 0.26), 0.022, COL.chrome, 6));
-        g.push(tube(V(s * 0.17, 1.94, 0.3), V(s * 0.1, 1.86, 0.58), 0.012, COL.stick, 5));
-      }
-      hands = { L: V(-0.17, 1.94, 0.3), R: V(0.17, 1.94, 0.3) };
+    case 'tenors': { // sixes: four drums in an arc (14", 12", 10", 13") + two spocks (6", 8") out front
+      const top = 1.7;
+      const drums = [[-0.627, 0.292, 0.31, 0.46], [-0.219, 0.732, 0.27, 0.44], [0.29, 0.702, 0.22, 0.4], [0.627, 0.292, 0.29, 0.45],
+        [-0.15, 1.13, 0.13, 0.28, 0.06], [0.17, 1.12, 0.18, 0.3, 0.04]];
+      for (const [x, z, r, h, up = 0] of drums) g.push(...drum(V(x, top + up - h / 2, z), r, h, 'y', '#d9dadc'));
+      for (const s of [-1, 1]) g.push(tube(V(s * 0.13, 2.38, 0.17), V(s * 0.12, 1.95, 0.24), 0.022, COL.chrome, 6));
+      g.push(box(V(0, 1.95, 0.25), 0.32, 0.04, 0.05, COL.chrome), tube(V(0, 1.95, 0.27), V(0, top - 0.05, 0.42), 0.026, COL.chrome, 6));
+      hands = { L: V(-0.34, top + 0.17, 0.5), R: V(0.34, top + 0.17, 0.5) };
+      for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.1, top + 0.05, 0.98)));
       break;
     }
-    case 'bass': {
-      g.push(...drum(V(0, 1.72, 0.44), 0.44, 0.3, shell, 'x'));
+    case 'bass': { // heads face the sides, drum high on the chest; size from the bass number (1 smallest … 5 largest)
+      const r = BASS_R[(opts.bass || 3) - 1], w = 0.56, c = V(0, 2.04, 0.2 + r + 0.06);
+      g.push(...drum(c, r, w, 'x', COL.white));
+      for (const s of [-1, 1]) g.push(tube(V(s * 0.16, 2.4, 0.17), V(s * 0.14, c.y + r * 0.35, c.z - r + 0.04), 0.022, COL.chrome, 6));
+      hands = { L: V(-(w / 2 + 0.14), c.y - 0.06, c.z), R: V(w / 2 + 0.14, c.y - 0.06, c.z) };
       for (const s of [-1, 1]) {
-        g.push(tube(V(s * 0.2, 2.32, 0.16), V(s * 0.1, 2.0, 0.3), 0.022, COL.chrome, 6));
-        g.push(tube(V(s * 0.32, 1.8, 0.46), V(s * 0.24, 1.76, 0.52), 0.012, COL.stick, 5));
-        g.push(ball(V(s * 0.22, 1.76, 0.53), 0.05, COL.white));
+        const tip = V(s * (w / 2 + 0.07), c.y + 0.16, c.z + 0.05);
+        g.push(...stick(hands[s < 0 ? 'L' : 'R'], tip, COL.stick, 0.014), ball(tip, 0.075, COL.felt, 0.8, 1, 1));
       }
-      hands = { L: V(-0.33, 1.82, 0.45), R: V(0.33, 1.82, 0.45) };
       break;
     }
     case 'cymbal': {
-      for (const s of [-1, 1]) g.push(paint(new THREE.CylinderGeometry(0.23, 0.23, 0.014, 22).rotateZ(Math.PI / 2).translate(s * 0.11, 2.08, 0.42), COL.gold));
+      for (const s of [-1, 1]) g.push(paint(new THREE.CylinderGeometry(0.23, 0.23, 0.014, 22).rotateZ(Math.PI / 2).translate(s * 0.11, 2.08, 0.42), COL.bronze));
       hands = { L: V(-0.16, 2.08, 0.42), R: V(0.16, 2.08, 0.42) };
       break;
     }
@@ -248,44 +280,61 @@ function instrument(key, shell) {
   return { geos: g, hands, elbows };
 }
 
+// Jacket pattern (front): teal yoke across the shoulders and down the marcher's left side,
+// split from the black by a silver band running from the right shoulder down to the left hip. Back: teal yoke only.
+function jacketColor(x, y, z) {
+  if (z < -0.03) return y > 2.3 ? COL.teal : COL.black;
+  // band from (−0.3, 2.3) [marcher's right shoulder] to (0.3, 1.66) [left hip]
+  const ax = -0.3, ay = 2.3, bx = 0.3, by = 1.66;
+  const nx = -(by - ay), ny = bx - ax, len = Math.hypot(nx, ny);
+  const d = ((x - ax) * nx + (y - ay) * ny) / len; // > 0 above the line
+  if (Math.abs(d) < 0.035) return COL.silver;
+  return d > 0 ? COL.teal : COL.black;
+}
+
 const upperCache = new Map();
-function upperBody(sec, tone) {
-  const key = `${sec.key}|${tone}`;
+function upperBody(sec, tone, opts = {}) {
+  const key = `${sec.key}|${tone}|${opts.bass || ''}`;
   if (upperCache.has(key)) return upperCache.get(key);
-  const jacket = sec.color, trim = new THREE.Color(sec.color).multiplyScalar(0.62).getStyle();
-  const skin = SKIN[tone], guard = sec.family === 'guard';
+  const skin = SKIN[tone], guard = sec.family === 'guard', dm = sec.family === 'dm';
   const g = [];
-  // jacket: tapered, flattened torso + shoulders + collar; belt; white cross-belt
-  g.push(paint(new THREE.CylinderGeometry(0.3, 0.25, 0.92, 16).scale(1, 1, 0.62).translate(0, 2.0, 0), jacket));
-  g.push(limb(V(-0.24, 2.4, 0), V(0.24, 2.4, 0), 0.11, jacket));
-  g.push(paint(new THREE.CylinderGeometry(0.1, 0.12, 0.09, 12).translate(0, 2.5, 0), trim));
-  g.push(paint(new THREE.CylinderGeometry(0.262, 0.262, 0.07, 16).scale(1, 1, 0.64).translate(0, 1.6, 0), guard ? trim : COL.black));
-  if (!guard) g.push(paint(new THREE.BoxGeometry(0.075, 0.95, 0.02).rotateZ(-0.62).translate(0, 2.02, 0.18), COL.white));
+  // jacket: tapered, flattened torso painted with the uniform pattern; shoulder pads; stand-up collar; belt
+  g.push(paint(new THREE.CylinderGeometry(0.3, 0.25, 0.92, 72, 44).scale(1, 1, 0.62).translate(0, 2.0, 0), jacketColor));
+  for (const s of [-1, 1]) { // squared-off shoulder pads that stick out past the shoulders, silver piping underneath
+    g.push(ball(V(s * 0.27, 2.45, 0), 0.2, COL.teal, 1.0, 0.42, 0.85));
+    g.push(paint(new THREE.TorusGeometry(0.19, 0.012, 4, 20).rotateX(Math.PI / 2).scale(1, 1, 0.85).translate(s * 0.27, 2.43, 0), COL.silver));
+  }
+  g.push(paint(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 14).translate(0, 2.52, 0), COL.teal));
+  g.push(paint(new THREE.CylinderGeometry(0.102, 0.102, 0.018, 14).translate(0, 2.585, 0), COL.silver));
+  g.push(paint(new THREE.CylinderGeometry(0.262, 0.262, 0.07, 16).scale(1, 1, 0.64).translate(0, 1.6, 0), COL.black));
   // neck + head
   g.push(paint(new THREE.CylinderGeometry(0.075, 0.08, 0.16, 10).translate(0, 2.58, 0), skin));
   g.push(ball(V(0, 2.79, 0.02), 0.175, skin, 1, 1.12, 1.05));
   g.push(ball(V(0, 2.73, 0.2), 0.03, skin, 1, 1.2, 0.9)); // nose
-  if (sec.family === 'guard') { // hair + bun instead of a shako
+  if (guard) { // hair + bun instead of a shako
     g.push(paint(new THREE.SphereGeometry(0.185, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.55).scale(1, 1.12, 1.05).rotateX(-0.25).translate(0, 2.8, 0.0), HAIR[tone]));
     g.push(ball(V(0, 2.92, -0.16), 0.08, HAIR[tone]));
-  } else { // shako, band, visor, chin strap, plume
-    const dm = sec.family === 'dm';
-    const tall = dm ? 0.42 : 0.34;
-    g.push(paint(new THREE.CylinderGeometry(0.19, 0.17, tall, 16).translate(0, 2.92 + tall / 2, -0.01), dm ? COL.white : COL.shako));
-    g.push(paint(new THREE.CylinderGeometry(0.175, 0.175, 0.05, 16).translate(0, 2.96, -0.01), COL.gold));
-    g.push(paint(new THREE.CylinderGeometry(0.19, 0.19, 0.015, 16, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.9).rotateX(0.18).translate(0, 2.93, 0.06), COL.black));
-    g.push(paint(new THREE.TorusGeometry(0.17, 0.008, 4, 16, Math.PI).rotateZ(Math.PI).translate(0, 2.82, 0.03), COL.gold));
-    g.push(paint(new THREE.ConeGeometry(0.06, dm ? 0.55 : 0.38, 8).translate(0, 2.92 + tall + (dm ? 0.25 : 0.17), -0.02), dm ? COL.white : jacket));
-    g.push(ball(V(0, 2.95 + tall * 0.6, 0.18), 0.04, COL.gold)); // shako plate
+  } else { // teal shako (a little wider at the top), silver band and chin strap, black visor, big teal feather plume
+    const tall = dm ? 0.42 : 0.36, top = 2.92 + tall;
+    g.push(paint(new THREE.CylinderGeometry(0.205, 0.175, tall, 18).translate(0, 2.92 + tall / 2, -0.01), COL.teal));
+    g.push(paint(new THREE.CylinderGeometry(0.207, 0.207, 0.02, 18).translate(0, top - 0.01, -0.01), COL.silver));
+    g.push(paint(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 18).translate(0, 2.96, -0.01), COL.silver));
+    g.push(paint(new THREE.CylinderGeometry(0.2, 0.2, 0.016, 18, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.95).rotateX(0.2).translate(0, 2.93, 0.06), COL.visor));
+    g.push(paint(new THREE.TorusGeometry(0.17, 0.008, 4, 16, Math.PI).rotateZ(Math.PI).translate(0, 2.82, 0.03), COL.silver));
+    // plume: a clump of feathers rising from the front of the crown and leaning back
+    const s = dm ? 1.25 : 1;
+    const feathers = [[0, 0.06, 0.1, 0.07, COL.black], [0, 0.16, 0.06, 0.1, COL.tealDark], [0.05, 0.28, 0.0, 0.11, COL.teal], [-0.05, 0.3, 0.01, 0.11, COL.teal],
+      [0, 0.42, -0.06, 0.12, COL.tealLight], [0.04, 0.54, -0.12, 0.1, COL.teal], [-0.03, 0.62, -0.17, 0.08, COL.tealLight]];
+    for (const [x, y, z, r, col] of feathers) g.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
   }
-  // arms from shoulders to hands, white gloves
-  const ins = instrument(sec.key, trim);
+  // arms (black sleeves) from shoulders to hands
+  const ins = instrument(sec.key, opts);
   for (const s of ['L', 'R']) {
     const sh = SH[s], hd = ins.hands[s], sign = s === 'L' ? -1 : 1;
     const el = ins.elbows ? ins.elbows[s] : sh.clone().add(hd).multiplyScalar(0.5).add(V(sign * 0.13, -0.14, -0.04));
-    g.push(limb(sh, el, 0.078, jacket));
-    g.push(limb(el, hd, 0.066, jacket));
-    g.push(ball(hd, 0.068, COL.glove, 1, 0.9, 1.15));
+    g.push(limb(sh, el, 0.078, COL.black));
+    g.push(limb(el, hd, 0.066, COL.black));
+    g.push(ball(hd, 0.064, skin, 1, 0.9, 1.15));
   }
   g.push(...ins.geos);
   const merged = THREE.mergeGeometries(g);
@@ -319,7 +368,7 @@ const MAT = {
 };
 const silkMats = new Map();
 const silkMat = sec => {
-  if (!silkMats.has(sec.key)) silkMats.set(sec.key, new THREE.MeshLambertMaterial({ color: new THREE.Color(sec.color), side: THREE.DoubleSide }));
+  if (!silkMats.has(sec.key)) silkMats.set(sec.key, new THREE.MeshLambertMaterial({ color: new THREE.Color(COL.teal), side: THREE.DoubleSide }));
   return silkMats.get(sec.key);
 };
 
@@ -353,10 +402,12 @@ function buildPerson(p) {
   const root = new THREE.Group(); root.userData.id = p.id;
   // body (whole marcher: turns for guard/DM, dips with the step) → hips (lower body: turns for slides) + upper body
   const body = new THREE.Group(); root.add(body);
-  body.add(new THREE.Mesh(upperBody(sec, hash(p.id) % SKIN.length), MAT.upper));
+  // bass drums are sized by the bass number in the label (D1 = smallest … D5 = largest)
+  const opts = sec.key === 'bass' ? { bass: Math.min(5, Math.max(1, parseInt(String(p.label).replace(/\D+/g, ''), 10) || 3)) } : {};
+  body.add(new THREE.Mesh(upperBody(sec, hash(p.id) % SKIN.length, opts), MAT.upper));
   const hips = new THREE.Group(); hips.position.y = HIP; body.add(hips);
   hips.add(new THREE.Mesh(GEO.pelvis, MAT.pants));
-  const L = makeLeg(-1), R = makeLeg(1);
+  const L = makeLeg(1), R = makeLeg(-1); // marcher's left leg is on +X
   hips.add(L.thigh, R.thigh);
   if (sec.family === 'guard') {
     const geo = new THREE.PlaneGeometry(1.3, 0.85, 10, 3).translate(0.65, 0, 0);

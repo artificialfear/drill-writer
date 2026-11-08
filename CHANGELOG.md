@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.15.0 — 2026-11-08
+- **Real band uniform in 3D.** Every marcher wears the same uniform:
+  - Jacket: black, with a teal yoke and squared teal shoulder pads with silver piping. A silver band runs from the right shoulder down to the left hip, with teal above it. The collar is teal.
+  - Black sleeves and pants.
+  - Teal shako with silver trim and chin strap, a black visor, and a full teal feather plume.
+  - The guard wears the same jacket with a teal silk. The drum major's shako and plume are a little taller.
+- **Bigger, more accurate battery:**
+  - Snare: a 14″ × 12″ marching snare with its top head at the belly. It sits on a T-bar carrier and has tension rods.
+  - Tenors: real sixes, with 14″, 13″, 12″ and 10″ drums in an arc around the waist plus 6″ and 8″ spocks out front.
+  - Bass drums: higher on the chest, sized by the bass number in the label. D1 is the smallest (about 18″) and D5 the largest (about 26″). Labels without a number default to bass 3.
+  - All drums have black shells, chrome hoops and lugs, and white heads.
+- **Sticks are held correctly.** Snare and tenor hands sit out to the sides with the butt end showing behind the hand, and the sticks angle inward in a V toward the center of the head. Bass players hold mallets at the sides of the drum, angled up so the felt head meets the drum.
+- Left and right are fixed. The flute and saxes are held on the marcher's right, and the sousaphone rests on the left shoulder with its valves on the right.
+
 ## 0.14.0 — 2026-11-08
 - **More realistic marchers in 3D.** Every marcher now has real proportions: a tapered jacket in the section color with a white cross-belt and black waist belt, arms bent to hold the instrument, white gloves, a neck and head (five skin tones, varied per student), and a black shako with a gold band, visor, chin strap, plate, and plume. The drum major wears a white shako with a tall plume and holds a conducting pose. Guard members have hair instead of a shako.
 - **Real instruments in the hands:**
