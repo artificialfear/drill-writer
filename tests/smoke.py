@@ -279,7 +279,7 @@ with sync_playwright() as p:
     # ---- student view on a phone ----
     page.set_viewport_size({'width': 1440, 'height': 860})
     page.click('#btnSample'); page.wait_for_timeout(600)  # autosave the sample for the student page
-    phone = browser.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True)
+    phone = browser.new_context(viewport={'width': 844, 'height': 390}, device_scale_factor=2, is_mobile=True, has_touch=True)
     sp = phone.new_page()
     sp.on('pageerror', lambda e: errors.append('student: ' + str(e)))
     # same origin as the editor, so seed its storage from the editor's saved show
@@ -330,6 +330,18 @@ with sync_playwright() as p:
     pv.wait_for_selector('#mainScreen:not([hidden])')
     check('preview opens straight to the chosen student and set', pv.inner_text('#whoLabel') == 'G3' and pv.inner_text('#setName') == '2' and pv.is_visible('#previewBanner'))
     pv.screenshot(path=f'{SHOTS}/s8-preview-guard.png')
+    # zoom in on my dot
+    sp.click('#zoomMe'); span0 = sp.evaluate('__sv.span'); sp.click('#zoomIn'); sp.click('#zoomIn')
+    check('+ zooms in closer to my dot', sp.evaluate('__sv.span') < span0)
+    sp.click('#zoomAll'); check('Field shows the whole field', sp.evaluate('__sv.zoom') == 'all')
+    sp.click('#zoomIn'); check('+ from Field zooms back to my dot', sp.evaluate('__sv.zoom') == 'me')
+    sp.screenshot(path=f'{SHOTS}/s9-landscape.png')
+    # upright phone: asks to turn sideways, with a way to keep it upright
+    up = phone.new_page(); up.set_viewport_size({'width': 390, 'height': 844})
+    up.goto(URL.replace('index.html', 'student.html')); up.wait_for_selector('#mainScreen:not([hidden])')
+    check('upright phone is asked to turn sideways', up.is_visible('#rotateHint'))
+    up.screenshot(path=f'{SHOTS}/s10-rotate-hint.png')
+    up.click('#keepPortrait'); check('can keep it upright', not up.is_visible('#rotateHint'))
     phone.close()
 
     check('no console errors during run', not errors)

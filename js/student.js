@@ -18,7 +18,7 @@ const POV_KEY = 'drillwriter.pov';
 let savedPov = 'performer'; try { savedPov = localStorage.getItem(POV_KEY) || 'performer'; } catch (e) {}
 // pov: 'performer' = as the student sees it facing the audience (front at the top, Side 1 on the right);
 //      'director'  = from the press box (front at the bottom, Side 1 on the left)
-const st = { show: null, me: null, cur: 0, count: 0, playing: false, zoom: 'me', mode: '2d', v3: null, pov: savedPov === 'director' ? 'director' : 'performer' };
+const st = { show: null, me: null, cur: 0, count: 0, playing: false, zoom: 'me', span: 34, mode: '2d', v3: null, pov: savedPov === 'director' ? 'director' : 'performer' };
 window.__sv = st;
 
 // ---------- loading ----------
@@ -39,6 +39,7 @@ function toast(m) { const t = $('toast'); t.textContent = m; t.classList.add('sh
 
 // ---------- picker ----------
 function showPicker() {
+  document.body.classList.remove('has-main');
   $('mainScreen').hidden = true; $('pickScreen').hidden = false;
   $('pickTitle').textContent = `Find your drill ID — ${st.show.title}`;
   renderPick('');
@@ -63,6 +64,9 @@ function renderPick(q) {
 }
 function pickMe(id) {
   st.me = id;
+  document.body.classList.add('has-main');
+  // a tap is a user gesture: on phones that allow it, go full screen and lock sideways
+  if (!PREVIEW && $('fsBtn') && !$('fsBtn').hidden && !document.fullscreenElement) lockLandscape(false);
   try { localStorage.setItem(meKey(), id); } catch (e) {}
   $('pickScreen').hidden = true; $('mainScreen').hidden = false;
   if (PREVIEW) $('pvWho').textContent = me().label;
@@ -162,9 +166,10 @@ function fitView(focus) {
   const f = st.pov === 'performer' ? -1 : 1;
   view.flip = f === -1;
   if (st.zoom === 'me' && focus) {
-    view.scale = Math.min(W / 52, H / 34);
+    // st.span = how many steps fit across the short side of the screen (smaller = closer)
+    view.scale = Math.min(W / (st.span * 1.5), H / st.span);
     view.ox = W / 2 - f * focus.x * view.scale;
-    view.oy = H * 0.58 + f * focus.y * view.scale; // a little below center, so more of the field ahead shows
+    view.oy = H * (W > H ? 0.55 : 0.58) + f * focus.y * view.scale; // a little below center, so more of the field ahead shows
   } else {
     view.scale = Math.min((W - 12) / 200, (H - 12) / 104);
     view.ox = W / 2; view.oy = H / 2 + f * 40.7 * view.scale;
@@ -386,6 +391,31 @@ async function setMode(mode) {
   if (mode === '3d') st.v3.show(); else { st.v3 && st.v3.hide(); draw(); }
 }
 
+// ---------- zoom ----------
+function syncZoomBtns() {
+  $('zoomMe').classList.toggle('on', st.zoom === 'me'); $('zoomAll').classList.toggle('on', st.zoom === 'all');
+}
+function setZoom(z, span) {
+  st.zoom = z; if (span) st.span = span;
+  syncZoomBtns();
+  if (st.v3) st.v3.setCamera(z === 'me' ? null : (st.pov === 'performer' ? 'backfield' : 'press'));
+  draw();
+}
+function zoomBy(k) {
+  if (st.zoom === 'all') { if (k < 1) setZoom('me', 60); return; }
+  st.span = Math.max(8, Math.min(90, st.span * k));
+  if (st.span >= 90 && k > 1) return setZoom('all');
+  syncZoomBtns(); draw();
+}
+
+// ---------- landscape lock (Android/Chrome only: needs full screen; iPhones can't lock from a web page) ----------
+async function lockLandscape(fromButton) {
+  try {
+    if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+    await screen.orientation.lock('landscape');
+  } catch (e) { if (fromButton) toast("This phone won't lock sideways from a web page — just turn it."); }
+}
+
 // ---------- point of view ----------
 function setPov(pov, quiet) {
   st.pov = pov;
@@ -408,8 +438,10 @@ function wire() {
   window.__svPick = id => { if (st.show && st.show.performers.some(p => p.id === id)) pickMe(id); };
   $('pFrom').onchange = updatePct; $('pPct').oninput = updatePct;
   $('practiceDlg').addEventListener('close', () => { if ($('practiceDlg').returnValue === 'go') goPractice(); });
-  $('zoomMe').onclick = () => { st.zoom = 'me'; $('zoomMe').classList.add('on'); $('zoomAll').classList.remove('on'); draw(); };
-  $('zoomAll').onclick = () => { st.zoom = 'all'; $('zoomAll').classList.add('on'); $('zoomMe').classList.remove('on'); if (st.v3) st.v3.setCamera(st.pov === 'performer' ? 'backfield' : 'press'); draw(); };
+  $('zoomMe').onclick = () => setZoom('me', 34);
+  $('zoomAll').onclick = () => setZoom('all');
+  $('zoomIn').onclick = () => zoomBy(1 / 1.4);
+  $('zoomOut').onclick = () => zoomBy(1.4);
   $('povPerf').onclick = () => setPov('performer');
   $('povDir').onclick = () => setPov('director');
   setPov(st.pov, true);
@@ -419,10 +451,44 @@ function wire() {
     document.querySelectorAll('.panel').forEach(pn => pn.classList.toggle('on', pn.id === `tab-${b.dataset.tab}`));
   });
   $('printBtn').onclick = () => window.print();
-  // swipe the field left/right to change sets
-  let sx0 = null;
-  canvas.addEventListener('pointerdown', e => { sx0 = e.clientX; });
-  canvas.addEventListener('pointerup', e => { if (sx0 == null) return; const dx = e.clientX - sx0; sx0 = null; if (Math.abs(dx) > 50 && !st.playing) goSet(st.cur + (dx < 0 ? 1 : -1)); });
+  // one finger: swipe left/right to change sets, double-tap to switch Me/Field; two fingers: pinch to zoom
+  const pts = new Map(); let sx0 = null, pinch = null, lastTap = 0;
+  canvas.addEventListener('pointerdown', e => {
+    canvas.setPointerCapture(e.pointerId); pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 1) sx0 = e.clientX;
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()]; sx0 = null;
+      if (st.zoom === 'all') { st.zoom = 'me'; st.span = 70; syncZoomBtns(); }
+      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), span0: st.span };
+    }
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch && pts.size === 2) {
+      const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+      st.span = Math.max(8, Math.min(90, pinch.span0 * pinch.d0 / Math.max(10, d)));
+      draw();
+    }
+  });
+  const up = e => {
+    pts.delete(e.pointerId);
+    if (pinch) { if (pts.size === 0) { pinch = null; if (st.span > 85) setZoom('all'); } return; }
+    if (sx0 == null) return;
+    const dx = e.clientX - sx0; sx0 = null;
+    if (Math.abs(dx) > 50 && !st.playing) { goSet(st.cur + (dx < 0 ? 1 : -1)); return; }
+    const now = performance.now();
+    if (Math.abs(dx) < 8 && now - lastTap < 320) { setZoom(st.zoom === 'me' ? 'all' : 'me', 34); lastTap = 0; } else lastTap = now;
+  };
+  canvas.addEventListener('pointerup', up);
+  canvas.addEventListener('pointercancel', up);
+  canvas.addEventListener('wheel', e => { e.preventDefault(); zoomBy(e.deltaY < 0 ? 1 / 1.15 : 1.15); }, { passive: false });
+  // landscape: hint to turn the phone; full screen + orientation lock where the browser allows it (Android)
+  $('keepPortrait').onclick = () => { document.body.classList.add('portrait-ok'); try { sessionStorage.setItem('drillwriter.portraitOk', '1'); } catch (e) {} setTimeout(resize, 50); };
+  try { if (sessionStorage.getItem('drillwriter.portraitOk')) document.body.classList.add('portrait-ok'); } catch (e) {}
+  const canLock = !!(document.documentElement.requestFullscreen && screen.orientation && screen.orientation.lock) && !params.has('embed');
+  $('fsBtn').hidden = !canLock || !matchMedia('(pointer: coarse)').matches;
+  $('fsBtn').onclick = () => lockLandscape(true);
   new ResizeObserver(resize).observe(canvas);
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;

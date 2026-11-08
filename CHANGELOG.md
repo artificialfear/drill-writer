@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.10.0 — 2026-11-07
+- **Student view is built for landscape.** Sideways, the field fills the left of the screen and the set card, tabs and Play / Stop / Practice sit on the right.
+- Holding a phone upright shows "Turn your phone sideways", with a small "Keep it upright anyway" button for students whose rotation lock is on.
+- On Android, opening your dot goes full screen and locks sideways (⛶ button to do it again). iPhones don't let web pages lock rotation, so they rely on the prompt.
+- **Zoom**: + / − to get closer to (or farther from) your dot, pinch on the field, scroll on a computer, double-tap to switch between Me and Field.
+- Added a web-app manifest and icons ("My Drill") so Add to Home Screen opens full screen and sideways on Android — groundwork for the offline student link.
+- Students mode in the editor previews sideways phones by default.
+
 ## 0.9.1 — 2026-11-07
 - **Students mode**: a small field map in the side panel. Click any dot to see that student's phone (the dropdown still works). The previewed student is the red dot, and the map follows the phone's set while it plays.
 - **Stop button (■)** next to Play, in the editor and on the student phone. Stop goes back to the start of the move that was playing, and the next Play replays that same move — handy for watching one move over and over. Esc also stops in the editor. In Practice / Rehearse, Stop returns to the From set.

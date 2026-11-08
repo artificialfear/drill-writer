@@ -88,6 +88,12 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - `stopPlayback()` (editor) / `stopToStart()` (student): back to the start of the move that was playing (`lastMove` recorded during play) and set `replayHere`/`replay` so the next Play skips the "play the move INTO this set" rewind once. Cleared by goToSet/goSet/scrub.
 - Students mode map: `#stuMap` redrawn every 200 ms while in Students mode, reading the iframe's `__sv` state (same origin); click → `contentWindow.__svPick(id)` (keeps the set), falling back to reloading the frame.
 
+## Landscape student view (v0.10)
+- Mat asked for the student view to be locked landscape. Reality: only Android Chrome can lock (`requestFullscreen` + `screen.orientation.lock('landscape')`, needs a tap → done in `pickMe` and the ⛶ button). iOS Safari cannot lock from a web page, and ignores manifest orientation; the portrait prompt (`#rotateHint`, CSS `orientation: portrait` + `max-width: 640px`, body.has-main) covers it, with "Keep it upright anyway" (sessionStorage) for rotation-locked phones.
+- Landscape layout = CSS grid in `@media (orientation: landscape) and (max-height: 560px)`: stage left, top/tabs/panel/controls right.
+- Zoom: `st.zoom` 'me'|'all', `st.span` = steps across the short side (default 34, 8–90). + / − (`zoomBy`), pinch (two pointers), wheel, double-tap toggles. Swipe = change set (one finger only).
+- `manifest.webmanifest` (start_url student.html, display fullscreen, orientation landscape) + `icons/icon-192/512.png`.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):

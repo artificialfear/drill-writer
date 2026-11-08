@@ -6,6 +6,11 @@
 <meta name="theme-color" content="#1b201d">
 <title>My Drill</title>
 <link rel="stylesheet" href="css/student.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="My Drill">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%232f6b3c'/><circle cx='16' cy='16' r='7' fill='%23ffd166'/></svg>">
 </head>
 <body>
@@ -28,6 +33,7 @@
     <button id="whoBtn" class="who" title="Change drill ID"><span id="whoLabel">T4</span><span id="whoSection" class="muted"></span> ▾</button>
     <span id="showName" class="show-name muted"></span>
     <div class="seg"><button id="v2d" class="on">2D</button><button id="v3d">3D</button></div>
+    <button id="fsBtn" class="fs" title="Full screen, locked sideways" aria-label="Full screen" hidden>⛶</button>
   </header>
 
   <div class="stage" id="stage">
@@ -37,7 +43,8 @@
       <button id="povPerf" class="on" title="As you see it, facing the audience">Performer</button><button id="povDir" title="From the press box, like the director">Director</button>
     </div>
     <div class="zoom-btns">
-      <button id="zoomMe" class="on">Me</button><button id="zoomAll">Field</button>
+      <button id="zoomAll" title="Whole field">Field</button><button id="zoomMe" class="on" title="Zoom to my dot">Me</button>
+      <button id="zoomOut" title="Zoom out" aria-label="Zoom out">−</button><button id="zoomIn" title="Zoom in closer to my dot" aria-label="Zoom in">+</button>
     </div>
     <div id="bigCount" class="big-count" hidden>
       <div class="bc-main"><span class="bc-n"></span><span class="bc-of"></span></div>
@@ -101,6 +108,13 @@
   <h1>No drill here yet</h1>
   <p class="muted" id="emptyMsg">Open the editor and load or write a show first.</p>
 </section>
+
+<div id="rotateHint" class="rotate-hint" role="dialog" aria-label="Turn your phone sideways">
+  <div class="rot-icon">📱</div>
+  <h2>Turn your phone sideways</h2>
+  <p>My Drill works best in landscape, so you can see the whole field. If it doesn't turn, switch off rotation lock.</p>
+  <button id="keepPortrait">Keep it upright anyway</button>
+</div>
 
 <div id="toast" class="toast" role="status"></div>
 <script type="module" src="js/student.js"></script>
