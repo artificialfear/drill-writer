@@ -1133,12 +1133,11 @@ function addProp(kindKey) {
 let lastT = 0, raf = 0;
 function play() {
   if (state.show.sets.length < 2) return toast('Add a second set to play a transition.');
-  // Sitting on set N, Play shows the move INTO set N (the counts that belong to set N, like its timeline block),
-  // so start from set N-1. Paused mid-move, it just continues.
-  const starts = setStarts(state.show);
+  // Play starts AT the current set and runs forward. Paused mid-move, it continues.
+  // On the last set there's nothing ahead, so it plays the final move (from the set before).
+  const starts = setStarts(state.show), last = state.show.sets.length - 1;
   const at = starts.findIndex(c => Math.abs(c - state.count) < 1e-6);
-  if (at > 0 && !state.replayHere) { state.count = starts[at - 1]; state.cur = at - 1; }
-  state.replayHere = false;
+  if (at === last || state.count >= starts[last] - 1e-6) { state.count = starts[last - 1]; state.cur = last - 1; }
   state.playing = true; lastT = performance.now();
   $('btnPlay').textContent = '⏸';
   raf = requestAnimationFrame(tick);

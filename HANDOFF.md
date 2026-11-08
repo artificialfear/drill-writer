@@ -76,7 +76,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Mat's agreed next UI steps after Emily's hands-on session: Write/Rehearse/Students modes, undo toasts instead of confirm(), save status, new-show wizard, "?" shortcut sheet, onion skin of next set.
 
 ## Playback rule
-- Sitting on set N (N>0), Play starts at set N-1 so it shows the move INTO set N (Mat's request, 2026-11-07). Mid-move it resumes. Rehearse mode is unchanged (explicit From/To).
+- Play starts AT the current set and runs forward, in every view (Mat, 2026-11-08 — replaces the earlier 'play the move into set N' rule). Mid-move it resumes; on the last set it plays the final move. Stop returns to the set the move started from. Rehearse/Practice use explicit From/To.
 
 ## App modes (v0.9)
 - `state.appMode` 'write' | 'rehearse' | 'students', mirrored on `body[data-mode]`; CSS shows/hides regions. `setAppMode()` stops playback, resets the tool, renders the mode, resizes the canvas.

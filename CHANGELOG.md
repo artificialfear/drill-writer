@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.11.1 — 2026-11-08
+- Play and Space now start **from the set you're on** and run forward — in Write, 3D, the student phone and the Students preview. Paused partway through a move, they continue from there. On the last set (nothing ahead), they play the final move into it. Stop returns to the set the move started from.
+
 ## 0.11.0 — 2026-11-08
 - **Collision check.** The app works out where every pair of marchers comes closest during each move and warns when they'd bump: closer than 1 step center to center for winds and guard, more room for battery (drums) and front ensemble. Spacing that's written into a set (a tight 1-step form) is not flagged — only collisions in the middle of a move.
   - Timeline: a red ✕ and red top edge on any set whose move has a collision. Sets list: ✕ before the set name.

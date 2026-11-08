@@ -378,11 +378,9 @@ function renderBigCount({ phase, count, beatNum, run }) {
 let raf = 0, lastT = 0;
 function play() {
   if (st.show.sets.length < 2) return;
-  // on set N, play the move into set N (start from set N-1); mid-move, continue
-  const starts = setStarts(st.show);
-  const at = starts.findIndex(c => Math.abs(c - st.count) < 1e-6);
-  if (at > 0 && !st.replay) { st.count = starts[at - 1]; st.cur = at - 1; render(); }
-  st.replay = false;
+  // play from the current set forward; mid-move, continue; on the last set, play the final move
+  const starts = setStarts(st.show), last = st.show.sets.length - 1;
+  if (st.count >= starts[last] - 1e-6) { st.count = starts[last - 1]; st.cur = last - 1; render(); }
   st.playing = true; $('playBtn').textContent = '⏸ Pause'; lastT = performance.now();
   raf = requestAnimationFrame(tick);
 }
