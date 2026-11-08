@@ -2,7 +2,7 @@
 // World units are steps, same as the 2D editor. Three.js mapping: X = x, Y = up, Z = FIELD_DEPTH/2 - y,
 // so the front sideline (audience) is toward +Z.
 import * as THREE from '../vendor/three-bundle.min.js';
-import { FIELD_DEPTH, GOAL_X, END_X, refLines, sectionByKey } from './model.js';
+import { FIELD_DEPTH, GOAL_X, END_X, refLines, sectionByKey, pathFrac } from './model.js';
 import { technique } from './technique.js';
 
 const HALF_D = FIELD_DEPTH / 2;
@@ -279,7 +279,9 @@ export function create3D(container, { getFrame, onPick }) {
       const q = frame.pos[p.id];
       g.position.set(q.x, 0, toZ(q.y));
       const { body, hips, legL, legR, ring, label } = g.userData.parts;
-      const moving = inMotion && Math.hypot(B.pos[p.id].x - A.pos[p.id].x, B.pos[p.id].y - A.pos[p.id].y) > 0.05;
+      // stepping only while actually moving (not during a hold before or after)
+      const pf = inMotion ? pathFrac(show, frame.i + 1, p.id, frame.frac) : 0;
+      const moving = inMotion && pf > 0 && pf < 1 && Math.hypot(B.pos[p.id].x - A.pos[p.id].x, B.pos[p.id].y - A.pos[p.id].y) > 0.05;
       // technique for this move: winds slide (hips toward travel, torso to the box), battery crab step,
       // guard/DM turn their whole body; moving backward = hips away from travel, stepping back
       const t = moving ? technique(g.userData.family, A.pos[p.id], B.pos[p.id]) : null;

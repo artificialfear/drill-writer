@@ -2,12 +2,12 @@
 import {
   FIELD_DEPTH, GOAL_X, END_X, HASH_TYPES, refLines, snapPt, snapX, describeX, describeY, stepSize,
   SECTIONS, sectionByKey, PROP_KINDS, uid, newShow, normalizeShow, sampleShow,
-  setStarts, totalCounts, locate, positionsAt
+  setStarts, totalCounts, locate, positionsAt, moveStep, moveTiming, timingText
 } from './model.js';
 import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
 import { technique } from './technique.js';
 import { collisionsInto } from './checks.js';
-import { proposeFix, proposeAll, applySwap, swapReport, okKeyX, okKeyBig, isOkX, isOkBig } from './fix.js';
+import { proposeFix, proposeAll, applyPlan, swapReport, okKeyX, okKeyBig, isOkX, isOkBig } from './fix.js';
 import { css, drawField as drawFieldShared, shapePath as shapePathShared, propCorners } from './fieldDraw.js';
 import { createRehearsal, COUNTOFF_PRESETS, SOUNDS, DEFAULT_SETTINGS } from './rehearse.js';
 
@@ -162,7 +162,7 @@ function draw() {
   if (editing && opt.ghost && prev) {
     for (const p of show.performers) {
       const a = prev.pos[p.id], b = curSet().pos[p.id];
-      const st = stepSize(a, b, counts);
+      const st = moveStep(show, state.cur, p.id);
       if (!st.dist) continue;
       ctx.strokeStyle = st.big ? warn : css('--muted'); ctx.globalAlpha = st.big ? 0.9 : 0.45;
       ctx.lineWidth = st.big ? 1.5 : 1; ctx.setLineDash([4, 3]);
@@ -171,6 +171,11 @@ function draw() {
       ctx.beginPath(); ctx.arc(sx(a.x), sy(a.y), Math.max(2, 0.4 * s), 0, Math.PI * 2);
       ctx.fillStyle = css('--muted'); ctx.fill();
       ctx.globalAlpha = 1;
+      if (st.pre || st.post) { // timing tag on the path: "H4 ›" at the start, "› H4" at the end
+        ctx.font = `700 ${Math.max(9, Math.min(12, 1.0 * s))}px system-ui, sans-serif`; ctx.fillStyle = css('--select'); ctx.textBaseline = 'middle';
+        if (st.pre) { ctx.textAlign = 'right'; ctx.fillText(`H${st.pre}`, sx(a.x) - 5, sy(a.y)); }
+        if (st.post) { ctx.textAlign = 'left'; ctx.fillText(`H${st.post}`, sx(b.x) + Math.max(6, 0.9 * s), sy(b.y) + Math.max(8, 0.9 * s)); }
+      }
     }
   }
 
@@ -232,8 +237,8 @@ function draw() {
     ctx.lineWidth = 1; ctx.strokeStyle = ink; ctx.globalAlpha = 0.6; ctx.stroke(); ctx.globalAlpha = 1;
     // step-size warning ring
     let big = false;
-    if (editing && prev) big = stepSize(prev.pos[p.id], curSet().pos[p.id], counts).big;
-    else if (!editing && snap.frac) big = stepSize(show.sets[snap.i].pos[p.id], nextSt.pos[p.id], nextSt.counts).big;
+    if (editing && prev) big = moveStep(show, state.cur, p.id).big && !isOkBig(show, state.cur, p.id);
+    else if (!editing && snap.frac) big = moveStep(show, snap.i + 1, p.id).big && !isOkBig(show, snap.i + 1, p.id);
     if (big) { ctx.beginPath(); ctx.arc(X, Y, r + 3, 0, Math.PI * 2); ctx.strokeStyle = warn; ctx.lineWidth = 1.5; ctx.stroke(); }
     if (bumping.has(p.id)) { ctx.beginPath(); ctx.arc(X, Y, r + 5, 0, Math.PI * 2); ctx.strokeStyle = warn; ctx.lineWidth = 3.5; ctx.stroke(); }
     if (state.sel.has(p.id)) { ctx.beginPath(); ctx.arc(X, Y, r + (big ? 6 : 3.5), 0, Math.PI * 2); ctx.strokeStyle = sel; ctx.lineWidth = 2.5; ctx.stroke(); }
@@ -667,7 +672,7 @@ const collisions = () => allColl().map(list => list.filter(c => !isOkX(state.sho
 function transitionWarnings(i) {
   if (i === 0) return 0;
   const A = state.show.sets[i - 1], B = state.show.sets[i];
-  return state.show.performers.filter(p => stepSize(A.pos[p.id], B.pos[p.id], B.counts).big && !isOkBig(state.show, i, p.id)).length;
+  return state.show.performers.filter(p => A.pos[p.id] && B.pos[p.id] && moveStep(state.show, i, p.id).big && !isOkBig(state.show, i, p.id)).length;
 }
 
 function renderSets() {
@@ -770,8 +775,8 @@ function renderDotInfo() {
   let rows = '';
   state.show.sets.forEach((st, i) => {
     const q = st.pos[p.id];
-    const ss = i ? stepSize(state.show.sets[i - 1].pos[p.id], q, st.counts) : null;
-    rows += `<tr class="${i === state.cur ? 'current' : ''}"><td>${escapeHtml(st.name)}</td><td>${i ? st.counts : '—'}</td>
+    const ss = i ? moveStep(state.show, i, p.id) : null, tt = timingText(ss);
+    rows += `<tr class="${i === state.cur ? 'current' : ''}"><td>${escapeHtml(st.name)}</td><td>${i ? st.counts : '—'}${tt ? `<br><span class="help">${tt}</span>` : ''}</td>
       <td>${escapeHtml(describeX(q.x))}</td><td>${escapeHtml(describeY(q.y, state.show.field))}</td>
       <td class="${ss && ss.big ? 'big' : ''}">${ss ? (ss.dist < 0.01 ? 'Hold' : `${ss.label}<br><span class="help">${technique(sec.family, state.show.sets[i - 1].pos[p.id], q).label}</span>`) : ''}</td></tr>`;
   });
@@ -1190,8 +1195,8 @@ function renderProblems() {
   allColl().forEach((list, i) => list.forEach(c => items.push({ kind: 'x', i, c, ok: isOkX(state.show, c), key: okKeyX(i, c.a.id, c.b.id), ids: [c.a.id, c.b.id],
     text: `<b>Set ${escapeHtml(sets[i].name)}, count ${c.count}</b> — ${escapeHtml(c.a.label)} and ${escapeHtml(c.b.label)} pass ${c.dist < 0.05 ? 'right through each other' : `${Math.round(c.dist * 10) / 10} steps apart`}` })));
   for (let i = 1; i < sets.length; i++) for (const p of state.show.performers) {
-    const ss = stepSize(sets[i - 1].pos[p.id], sets[i].pos[p.id], sets[i].counts);
-    if (ss.big) items.push({ kind: 'big', i, p, ok: isOkBig(state.show, i, p.id), key: okKeyBig(i, p.id), ids: [p.id],
+    const ss = moveStep(state.show, i, p.id);
+    if (ss && ss.big) items.push({ kind: 'big', i, p, ok: isOkBig(state.show, i, p.id), key: okKeyBig(i, p.id), ids: [p.id],
       text: `<b>Set ${escapeHtml(sets[i].name)}</b> — ${escapeHtml(p.label)} needs ${ss.label}` });
   }
   const open = items.filter(x => !x.ok), done = items.filter(x => x.ok);
@@ -1228,13 +1233,13 @@ function startFix(i, ids) {
   ensureAtSet();
   const plans = i == null ? proposeAll(state.show) : [proposeFix(state.show, i, ids)].filter(Boolean);
   if (!plans.length) {
-    return toast(i == null ? "Swapping spots can't fix any of these. Try nudging a dot or adding counts." :
-      "Swapping spots can't fix this one (it usually means two different instruments cross). Nudge a dot, add counts, or mark it OK.");
+    return toast(i == null ? "Swaps and holds can't fix any of these. Try nudging a dot or adding counts." :
+      "Neither swapping spots nor a hold can fix this one. Nudge a dot, add counts, or mark it OK.");
   }
   if (state.mode === '3d') setMode('2d');
   state.drop = { mode: 'fix', plans, report: null };
   document.querySelector('.tabs').classList.add('locked');
-  showTab('drop'); zoomToPaths(plans[0].set, Object.keys(plans[0].perm)); goToSet(plans[0].set); renderDrop();
+  showTab('drop'); zoomToPaths(plans[0].set, [...Object.keys(plans[0].perm), ...Object.keys(plans[0].timing || {})]); goToSet(plans[0].set); renderDrop();
 }
 // zoom the field to frame these students' paths into set i
 function zoomToPaths(i, ids) {
@@ -1251,26 +1256,27 @@ function renderFix() {
   const d = state.drop, sets = state.show.sets;
   const label = id => (state.show.performers.find(p => p.id === id) || {}).label || id;
   const items = d.plans.map((pl, k) => {
-    const who = Object.keys(pl.perm);
+    const who = Object.keys(pl.perm), held = Object.entries(pl.timing || {});
     const fixed = (pl.before.x - pl.after.x) + (pl.before.big - pl.after.big);
     return `<li data-k="${k}" class="${pl.set === state.cur ? 'current' : ''}"><strong>Set ${escapeHtml(sets[pl.set].name)}</strong>
-      <span>${who.length} trade spots</span>
-      <span class="what">${who.map(label).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(', ')}</span>
+      <span>${[who.length ? `${who.length} trade spots` : '', held.length ? `${held.length} hold${held.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}</span>
+      ${who.length ? `<span class="what">Swap: ${who.map(label).sort((a, b) => a.localeCompare(b, undefined, { numeric: true })).join(', ')}</span>` : ''}
+      ${held.map(([id, t]) => `<span class="what">⏱ ${escapeHtml(label(id))}: ${t.pre ? `hold ${t.pre}, then move ${sets[pl.set].counts - t.pre - (t.post || 0)}` : `move ${sets[pl.set].counts - t.post}, then hold ${t.post}`}</span>`).join('')}
       <span class="what">Fixes ${fixed} problem${fixed === 1 ? '' : 's'}${pl.after.x + pl.after.big ? ` · ${pl.after.x + pl.after.big} left in this set` : ' · set is clean'}</span></li>`;
   }).join('');
   const nStudents = swapReport(state.show, d.plans).length;
-  $('dropBody').innerHTML = `<div class="drop-head"><h3>Fix by swapping spots</h3>
-      <p class="help">The picture doesn't change — students of the same instrument trade spots so nobody crosses or over-strides. Click a set to preview it: red dashed = old path, green = new path. Each student takes the other's path for the rest of the show, so later moves look the same.</p></div>
+  $('dropBody').innerHTML = `<div class="drop-head"><h3>Fix: swap spots &amp; holds</h3>
+      <p class="help">The picture doesn't change. Students of the same instrument may trade spots (each takes the other's path for the rest of the show), and where that isn't enough, one student holds a few counts before moving or arrives early. Click a set to preview it: red dashed = old path, green = new path, ⏱ = a hold.</p></div>
     <ol class="drop-sets">${items}</ol>
     <div class="drop-foot">
-      <span class="drop-summary">${nStudents} student${nStudents === 1 ? '' : 's'} get new dot sheets</span>
+      <span class="drop-summary">${nStudents} student${nStudents === 1 ? ' gets a' : 's get'} new dot sheet${nStudents === 1 ? '' : 's'}</span>
       <div class="row"><button id="fixApply" class="primary">Apply</button><button id="fixCancel">Cancel</button></div>
     </div>`;
-  $('dropBody').querySelectorAll('.drop-sets li').forEach(li => li.onclick = () => { const pl = d.plans[+li.dataset.k]; zoomToPaths(pl.set, Object.keys(pl.perm)); goToSet(pl.set); renderDrop(); });
+  $('dropBody').querySelectorAll('.drop-sets li').forEach(li => li.onclick = () => { const pl = d.plans[+li.dataset.k]; zoomToPaths(pl.set, [...Object.keys(pl.perm), ...Object.keys(pl.timing || {})]); goToSet(pl.set); renderDrop(); });
   $('fixApply').onclick = () => {
     pushUndo();
     const report = swapReport(state.show, d.plans);
-    for (const pl of d.plans) applySwap(state.show, pl.set, pl.perm);
+    for (const pl of d.plans) applyPlan(state.show, pl);
     d.report = report;
     state.sel = new Set(report.map(r => r.id)); state.selProp = null;
     document.querySelector('.tabs').classList.remove('locked');
@@ -1281,12 +1287,12 @@ function renderFix() {
 function renderFixReport() {
   const r = state.drop.report;
   $('dropBody').innerHTML = `<div class="drop-head"><h3>Fixed</h3>
-    <p class="help">These ${r.length} students have new dots from the set shown on — reprint just their dot sheets. They're selected on the field.</p></div>
-    <ul class="report-list">${r.map(x => `<li><strong>${escapeHtml(x.label)}</strong> — from set ${escapeHtml(x.from)}</li>`).join('')}</ul>
+    <p class="help">Only these students are affected — reprint just their dot sheets. They're selected on the field.</p></div>
+    <ul class="report-list">${r.map(x => `<li><strong>${escapeHtml(x.label)}</strong> — ${escapeHtml(x.text)}</li>`).join('')}</ul>
     <div class="row" style="margin-top:10px"><button id="fixCopy">Copy list</button><button id="fixDone" class="primary">Done</button></div>
     <p class="help">Undo (↶ or Ctrl+Z) puts everyone back.</p>`;
   $('fixCopy').onclick = async () => {
-    try { await navigator.clipboard.writeText(['Swapped spots — new dots for:', ...r.map(x => `${x.label}: from set ${x.from}`)].join('\n')); toast('Copied.'); } catch (e) { toast("Couldn't copy on this device."); }
+    try { await navigator.clipboard.writeText(['Drill fixes:', ...r.map(x => `${x.label}: ${x.text}`)].join('\n')); toast('Copied.'); } catch (e) { toast("Couldn't copy on this device."); }
   };
   $('fixDone').onclick = () => { state.userView = false; fitView(); endDrop('sets'); };
 }
@@ -1294,6 +1300,13 @@ function drawFixPreview() {
   const pl = state.drop.plans.find(p => p.set === state.cur); if (!pl) return;
   const A = prevSet().pos, B = curSet().pos, warn = css('--warn'), ok = css('--accent'), s = state.view.scale;
   ctx.save(); ctx.lineWidth = 2.5;
+  ctx.font = `800 ${Math.max(11, Math.min(15, 1.3 * s))}px system-ui, sans-serif`; ctx.textBaseline = 'middle';
+  for (const [id, t] of Object.entries(pl.timing || {})) {
+    const a = A[id], b = B[id];
+    ctx.strokeStyle = css('--select'); ctx.setLineDash([]); ctx.beginPath(); ctx.moveTo(sx(a.x), sy(a.y)); ctx.lineTo(sx(b.x), sy(b.y)); ctx.stroke();
+    ctx.fillStyle = css('--select'); ctx.textAlign = 'left';
+    ctx.fillText(t.pre ? `⏱ hold ${t.pre}, then go` : `⏱ arrive, hold ${t.post}`, sx(a.x) + 8, sy(a.y) - 10);
+  }
   for (const [w, owner] of Object.entries(pl.perm)) {
     const a = A[w], oldB = B[w], newB = B[owner];
     ctx.strokeStyle = warn; ctx.setLineDash([4, 4]); ctx.globalAlpha = 0.7;
@@ -1423,6 +1436,36 @@ function wireTimeline() {
 }
 
 // ---------------- Floating selection bar ----------------
+// ---------------- Timing: hold before / after the move into the current set ----------------
+function openTiming() {
+  const ids = selIds(); if (!ids.length) return;
+  ensureAtSet();
+  if (state.cur === 0) return toast('Set 1 has no move into it. Go to the set they move INTO.');
+  const st = curSet(), t = moveTiming(state.show, state.cur, ids[0]);
+  $('tmTitle').textContent = `Move into set ${st.name} · ${st.counts} counts · ${ids.length === 1 ? (state.show.performers.find(p => p.id === ids[0]) || {}).label : ids.length + ' selected'}`;
+  $('tmPre').value = t.pre; $('tmPost').value = t.post; $('tmPre').max = $('tmPost').max = Math.max(0, st.counts - 1);
+  updateTimingHint();
+  $('timingPop').hidden = false;
+}
+function updateTimingHint() {
+  const c = curSet().counts, pre = Math.max(0, +$('tmPre').value || 0), post = Math.max(0, +$('tmPost').value || 0), move = c - pre - post;
+  $('tmHint').textContent = move < 1 ? `Too long — they need at least 1 count to move (${c} counts total).`
+    : `${pre ? `Hold ${pre}, ` : ''}move ${move}${post ? `, hold ${post}` : ''}`;
+  $('tmHint').className = move < 1 ? 'help bad' : 'help';
+}
+function applyTiming(clear) {
+  const ids = selIds(), st = curSet(), c = st.counts;
+  const pre = clear ? 0 : Math.max(0, Math.round(+$('tmPre').value || 0)), post = clear ? 0 : Math.max(0, Math.round(+$('tmPost').value || 0));
+  if (c - pre - post < 1) return toast(`They need at least 1 count to move — this move is ${c} counts.`);
+  pushUndo();
+  st.timing = st.timing || {};
+  for (const id of ids) { if (pre || post) st.timing[id] = { pre, post }; else delete st.timing[id]; }
+  $('timingPop').hidden = true;
+  changed();
+  const big = ids.filter(id => (moveStep(state.show, state.cur, id) || {}).big).length;
+  if (big) toast(`${big} of them now need a step bigger than 6 to 5 — fewer counts to cover the same distance.`);
+}
+
 function updateSelBar() {
   const bar = $('selBar'), qs = $('quickSel');
   if (!bar) return;
@@ -1430,7 +1473,7 @@ function updateSelBar() {
   const busy = state.appMode !== 'write' || state.mode === '3d' || state.playing || dropLocked() || (g && ['drag', 'marquee', 'line', 'pan', 'pinch'].includes(g.kind));
   const ids = selIds();
   qs.hidden = state.appMode !== 'write' || state.mode === '3d' || state.playing || !!ids.length || !state.show.performers.length || dropLocked();
-  if (busy || !ids.length) { bar.hidden = true; return; }
+  if (busy || !ids.length) { bar.hidden = true; $('timingPop').hidden = true; return; }
   bar.hidden = false;
   $('selCount').textContent = ids.length === 1 ? (state.show.performers.find(p => p.id === ids[0]) || {}).label : `${ids.length} selected`;
   bar.querySelector('.sb-one').hidden = ids.length !== 1;
@@ -1848,6 +1891,11 @@ function init() {
   $('btnPlay').onclick = () => state.playing ? pause() : play();
   $('btnStop').onclick = stopPlayback;
   $('fixAll').onclick = () => startFix(null);
+  $('sbTiming').onclick = () => $('timingPop').hidden ? openTiming() : ($('timingPop').hidden = true);
+  $('tmPre').oninput = updateTimingHint; $('tmPost').oninput = updateTimingHint;
+  $('tmApply').onclick = () => applyTiming(false);
+  $('tmClear').onclick = () => applyTiming(true);
+  $('tmClose').onclick = () => { $('timingPop').hidden = true; };
   $('btnPrevSet').onclick = () => goToSet(atSet() ? state.cur - 1 : state.cur);
   $('btnNextSet').onclick = () => goToSet(state.cur + 1);
   $('scrub').oninput = ev => {

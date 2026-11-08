@@ -3,7 +3,7 @@
 // so the move into that set has the smallest possible largest step and no crossings.
 // Swapping happens from that set onward: a student takes over the whole rest of the other student's
 // path, so every later move looks exactly the same — only the move into the fixed set changes.
-import { stepSize } from './model.js';
+import { moveStep, moveTiming } from './model.js';
 import { collisionsInto } from './checks.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -17,8 +17,8 @@ export const isOkBig = (show, i, id) => !!(show.ok && show.ok[okKeyBig(i, id)]);
 export function problemsInto(show, i) {
   if (i <= 0) return { x: [], big: [] };
   const x = collisionsInto(show, i).filter(c => !isOkX(show, c));
-  const A = show.sets[i - 1].pos, B = show.sets[i].pos, counts = show.sets[i].counts;
-  const big = show.performers.filter(p => A[p.id] && B[p.id] && stepSize(A[p.id], B[p.id], counts).big && !isOkBig(show, i, p.id));
+  const A = show.sets[i - 1].pos, B = show.sets[i].pos;
+  const big = show.performers.filter(p => A[p.id] && B[p.id] && moveStep(show, i, p.id).big && !isOkBig(show, i, p.id));
   return { x, big };
 }
 function score(show, i, ids) {
@@ -88,9 +88,14 @@ export function applySwap(show, i, perm) {
   const who = Object.keys(perm); if (!who.length) return;
   const inv = {}; for (const w of who) inv[perm[w]] = w;
   for (let j = i; j < show.sets.length; j++) {
-    const st = show.sets[j], old = {};
-    for (const w of who) old[w] = st.pos[w] && { ...st.pos[w] };
+    const st = show.sets[j], old = {}, oldT = {};
+    for (const w of who) { old[w] = st.pos[w] && { ...st.pos[w] }; oldT[w] = st.timing && st.timing[w]; }
     for (const w of who) if (old[perm[w]]) st.pos[w] = old[perm[w]];
+    if (st.timing) for (const w of who) {
+      // later moves: timing belongs to the path, so it goes with it; the fixed move itself starts fresh
+      const t = j > i ? oldT[perm[w]] : null;
+      if (t) st.timing[w] = { ...t }; else delete st.timing[w];
+    }
     st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.map(id => inv[id] ?? id) }));
   }
 }
@@ -116,9 +121,53 @@ export function proposeFix(show, i, focusIds) {
     const sc = score(trial, i, allIds);
     if (better(sc, best)) { work = trial; best = sc; Object.assign(perm, sp); }
   }
-  if (!Object.keys(perm).length) return null;
+  // collisions swapping couldn't clear (often two different instruments): try a short hold
+  const timing = suggestHolds(work, i, focusIds ? new Set(involved) : null);
+  if (!Object.keys(perm).length && !Object.keys(timing).length) return null;
   const after = problemsInto(work, i);
-  return { set: i, perm, before: { x: pr.x.length, big: pr.big.length }, after: { x: after.x.length, big: after.big.length } };
+  return { set: i, perm, timing, before: { x: pr.x.length, big: pr.big.length }, after: { x: after.x.length, big: after.big.length } };
+}
+
+// For each collision still in the move into set i, find the shortest hold — one of the two students
+// waits before moving, or arrives early and holds — that clears it without adding a collision or a big step.
+// Mutates `work`; returns {id: {pre, post}} for the students whose timing changed.
+function suggestHolds(work, i, only) {
+  const out = {}, tried = new Set();
+  const st = work.sets[i], counts = st.counts || 0;
+  if (counts < 2) return out;
+  for (let guard = 0; guard < 40; guard++) {
+    const pr = problemsInto(work, i);
+    const c = pr.x.find(c => !tried.has(c.a.id + '|' + c.b.id) && (!only || only.has(c.a.id) || only.has(c.b.id)));
+    if (!c) break;
+    tried.add(c.a.id + '|' + c.b.id);
+    const total = pr.x.length;
+    let best = null;
+    for (const who of [c.a, c.b]) {
+      const was = moveTiming(work, i, who.id), wasBig = moveStep(work, i, who.id).big;
+      for (const kind of ['pre', 'post']) for (let k = 1; k < counts; k++) {
+        const t = { pre: was.pre, post: was.post }; t[kind] = k;
+        if (counts - t.pre - t.post < 1) break;
+        if (best && k >= best.k) break;
+        st.timing = st.timing || {};
+        const keep = st.timing[who.id];
+        st.timing[who.id] = t;
+        const after = problemsInto(work, i);
+        const ok = !after.x.some(x => (x.a.id === c.a.id && x.b.id === c.b.id)) && after.x.length < total
+          && (wasBig || !moveStep(work, i, who.id).big);
+        if (keep) st.timing[who.id] = keep; else delete st.timing[who.id];
+        if (ok) { best = { who, t, k, step: moveStep(work, i, who.id) }; break; }
+      }
+    }
+    if (best) { st.timing = st.timing || {}; st.timing[best.who.id] = best.t; out[best.who.id] = best.t; }
+  }
+  return out;
+}
+
+// apply a whole fix (swaps, then holds)
+export function applyPlan(show, pl) {
+  applySwap(show, pl.set, pl.perm || {});
+  const st = show.sets[pl.set];
+  for (const [id, t] of Object.entries(pl.timing || {})) { st.timing = st.timing || {}; st.timing[id] = { ...t }; }
 }
 
 // Every set with problems, in order. Swaps at one set don't change any other move, so they stack.
@@ -128,7 +177,7 @@ export function proposeAll(show) {
     const pr = problemsInto(work, i);
     if (!pr.x.length && !pr.big.length) continue;
     const p = proposeFix(work, i);
-    if (p) { applySwap(work, i, p.perm); plans.push(p); }
+    if (p) { applyPlan(work, p); plans.push(p); }
   }
   return plans;
 }
@@ -138,6 +187,10 @@ export function swapReport(show, plans) {
   const label = id => (show.performers.find(p => p.id === id) || {}).label || id;
   const firstSet = {};
   for (const pl of plans) for (const w of Object.keys(pl.perm)) if (firstSet[w] == null || pl.set < firstSet[w]) firstSet[w] = pl.set;
-  return Object.entries(firstSet).map(([id, i]) => ({ id, label: label(id), from: show.sets[i].name }))
-    .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+  const rows = Object.entries(firstSet).map(([id, i]) => ({ id, label: label(id), text: `new dots from set ${show.sets[i].name}` }));
+  for (const pl of plans) for (const [id, t] of Object.entries(pl.timing || {})) {
+    const what = [t.pre ? `hold ${t.pre} before moving` : '', t.post ? `arrive early and hold ${t.post}` : ''].filter(Boolean).join(', ');
+    rows.push({ id, label: label(id), text: `${what} into set ${show.sets[pl.set].name}` });
+  }
+  return rows.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 }

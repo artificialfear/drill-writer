@@ -1,3 +1,4 @@
+import { moveStep } from './model.js';
 // Drill Writer — dropping a performer from the show.
 // For each set, find the form the dropped dot belongs to and work out who would move for each fix:
 //   close   — the form keeps its spacing and gets one interval shorter; only the shorter side slides
@@ -146,7 +147,7 @@ export function applyDrop(show, pid, plans, choices, stepSize, setName = st => s
   const before = show.sets.map(st => JSON.parse(JSON.stringify(st.pos)));
   const bigBefore = new Set();
   for (let i = 1; i < show.sets.length; i++)
-    for (const p of show.performers) if (stepSize(show.sets[i - 1].pos[p.id], show.sets[i].pos[p.id], show.sets[i].counts).big) bigBefore.add(`${i}|${p.id}`);
+    for (const p of show.performers) if (moveStep(show, i, p.id).big) bigBefore.add(`${i}|${p.id}`);
 
   const droppedLabel = (show.performers.find(p => p.id === pid) || {}).label || '';
   show.sets.forEach((st, i) => {
@@ -155,6 +156,7 @@ export function applyDrop(show, pid, plans, choices, stepSize, setName = st => s
     // remember empty spots so a new student can fill them later
     if (choices[i] === 'hole' && st.pos[pid]) (st.holes = st.holes || []).push({ x: st.pos[pid].x, y: st.pos[pid].y, was: droppedLabel });
     delete st.pos[pid];
+    if (st.timing) delete st.timing[pid];
     st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.filter(id => id !== pid) })).filter(f => f.ids.length > 1);
   });
   const dropped = show.performers.find(p => p.id === pid);
@@ -166,7 +168,7 @@ export function applyDrop(show, pid, plans, choices, stepSize, setName = st => s
 function bigSet(show, stepSize) {
   const out = new Set();
   for (let i = 1; i < show.sets.length; i++)
-    for (const p of show.performers) if (stepSize(show.sets[i - 1].pos[p.id], show.sets[i].pos[p.id], show.sets[i].counts).big) out.add(`${i}|${p.id}`);
+    for (const p of show.performers) if (moveStep(show, i, p.id).big) out.add(`${i}|${p.id}`);
   return out;
 }
 function diffReport(show, before, bigBefore, stepSize, setName, skipId = null) {
@@ -180,7 +182,7 @@ function diffReport(show, before, bigBefore, stepSize, setName, skipId = null) {
   const newBig = [];
   for (let i = 1; i < show.sets.length; i++)
     for (const p of show.performers) {
-      const ss = stepSize(show.sets[i - 1].pos[p.id], show.sets[i].pos[p.id], show.sets[i].counts);
+      const ss = moveStep(show, i, p.id);
       if (ss.big && !bigBefore.has(`${i}|${p.id}`)) newBig.push({ label: p.label, set: setName(show.sets[i]), step: ss.label });
     }
   return { changed, newBig };

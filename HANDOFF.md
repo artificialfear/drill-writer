@@ -104,7 +104,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - `applySwap(show, i, perm)`: from set i onward, each student takes the other's whole track (positions + form ids remapped) — later transitions are identical, only move i changes. `proposeAll` stacks per-set swaps in order.
 - `show.ok` = { 'x:i:idA:idB' | 'b:i:id': true } — problems marked intentional; filtered out of markers, timeline, set list, student chip, and auto-fix.
 - Review uses `state.drop.mode = 'fix'` (same lock/panel as Drop/Add), `zoomToPaths()` frames the swapped paths.
-- Next (Mat agreed): per-student timing ("hold N then move" / "move then hold N") — needs interpolation, step size, technique, collision check, 3D and student text to honor it; then auto-fix can suggest holds for cross-instrument collisions.
+- Holds (v0.13): `set.timing[id] = {pre, post}` for the move INTO that set. `moveTiming()` clamps so ≥1 moving count; `pathFrac()` maps move fraction → path fraction (used by `positionsAt`, 3D stepping); `moveStep()` = step size over moving counts only — use it instead of `stepSize(...counts)` everywhere; `timingText()` for labels. Collision check is piecewise-linear over the merged hold breakpoints. Auto-fix `suggestHolds()` tries, per remaining collision, the smallest k (1…counts−1) of pre or post for either student that removes that collision, lowers the set's total, and adds no new big step. `applySwap` moves timing for later sets with the path and clears it on the fixed set. Drop deletes the dropped student's timing.
 
 ## Decisions Mat made
 - Repo under artificialfear.

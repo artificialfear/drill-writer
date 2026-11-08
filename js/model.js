@@ -81,6 +81,44 @@ export function stepSize(a, b, counts) {
   return { dist: d, per, n, label: `${round(n, 1)} to 5`, big: n < 6 - 1e-6 };
 }
 
+// ---------- Per-student timing inside a move ----------
+// set.timing[id] = { pre, post } for the move INTO that set:
+//   pre  = hold this many counts, then move   ("hold 4, then 12")
+//   post = move first, arrive and hold the last this many counts   ("12, then hold 4")
+export function moveTiming(show, i, id) {
+  const st = show.sets[i], counts = (st && st.counts) || 0;
+  const t = st && st.timing && st.timing[id];
+  let pre = t ? Math.max(0, Math.round(t.pre || 0)) : 0, post = t ? Math.max(0, Math.round(t.post || 0)) : 0;
+  if (counts && pre + post > counts - 1) { const k = (counts - 1) / (pre + post); pre = Math.floor(pre * k); post = Math.floor(post * k); }
+  if (!counts) { pre = 0; post = 0; }
+  return { pre, post, len: counts - pre - post, counts };
+}
+// how far along the path a student is at fraction f (0..1) of the move into set i
+export function pathFrac(show, i, id, f) {
+  const { pre, post, counts } = moveTiming(show, i, id);
+  if (!counts || (!pre && !post)) return f;
+  const c = f * counts;
+  if (c <= pre) return 0;
+  if (c >= counts - post) return 1;
+  return (c - pre) / (counts - pre - post);
+}
+// step size for one student's move into set i, using only the counts they actually move
+export function moveStep(show, i, id) {
+  if (i <= 0) return null;
+  const a = show.sets[i - 1].pos[id], b = show.sets[i].pos[id];
+  if (!a || !b) return null;
+  const t = moveTiming(show, i, id), ss = stepSize(a, b, t.len);
+  return Object.assign(ss, { pre: t.pre, post: t.post, moveCounts: t.len });
+}
+// "Hold 4, then 12" / "12, then hold 4" / "" for a plain move
+export function timingText(mv) {
+  if (!mv || mv.dist < 0.01) return '';
+  if (mv.pre && mv.post) return `Hold ${mv.pre}, move ${mv.moveCounts}, hold ${mv.post}`;
+  if (mv.pre) return `Hold ${mv.pre}, then ${mv.moveCounts}`;
+  if (mv.post) return `${mv.moveCounts}, then hold ${mv.post}`;
+  return '';
+}
+
 // ---------- Sections ----------
 export const SECTIONS = [
   { key: 'piccolo',  name: 'Piccolo',        prefix: 'P',  family: 'wind', color: '#7fc8f8' },
@@ -142,6 +180,7 @@ export function normalizeShow(s) {
     st.bpm = Number(st.bpm) > 0 ? Math.max(30, Math.min(300, Number(st.bpm))) : null; // tempo into this set; null = show tempo
     st.pos = st.pos || {}; st.props = st.props || {}; st.note = st.note || '';
     st.holes = Array.isArray(st.holes) ? st.holes.filter(h => h && isFinite(h.x) && isFinite(h.y)) : [];
+    st.timing = st.timing && typeof st.timing === 'object' ? st.timing : {};
     st.forms = Array.isArray(st.forms) ? st.forms.filter(f => f && Array.isArray(f.ids)) : [];
   });
   // every performer/prop needs a position in every set
@@ -190,7 +229,8 @@ export function positionsAt(show, count) {
   const pos = {}, props = {};
   for (const p of show.performers) {
     const a = A.pos[p.id], b = B.pos[p.id];
-    pos[p.id] = frac ? { x: lerp(a.x, b.x, frac), y: lerp(a.y, b.y, frac) } : { ...a };
+    const f = frac ? pathFrac(show, i + 1, p.id, frac) : 0;
+    pos[p.id] = f ? { x: lerp(a.x, b.x, f), y: lerp(a.y, b.y, f) } : { ...a };
   }
   for (const p of show.props) {
     const a = A.props[p.id], b = B.props[p.id];

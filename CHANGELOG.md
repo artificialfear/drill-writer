@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.13.0 — 2026-11-08
+- **Holds inside a move.** Select students, then **⏱ Timing** in the selection bar to set the move into the current set as "Hold 4, then move 12" or "Move 12, then hold 4" (or both). Everything follows it: playback and 3D (they stand still during the hold, legs only step while moving), step sizes (counted over the moving counts only, so a hold can create a big step — you're warned), the collision check, the Dot tab, and the student phone ("⏱ Hold 4, then 12", and the big count shows "HOLD — go on 5" or "HOLD — you're there").
+- Paths on the field show H4 at the start (hold first) or end (arrive early) of a timed move.
+- **Fix… now also suggests holds.** After trying a swap within the instrument, it looks for the shortest hold — one of the two students waits before moving, or arrives early — that clears a collision without causing another one or a big step. This fixes the collisions swapping can't, like two different instruments crossing. The review shows each hold (⏱ U2: move 23, then hold 1) and the report lists it.
+- Swapping spots now carries any holds along with the path.
+
 ## 0.12.0 — 2026-11-08
 - **Fix… (swap spots).** Every item in the Problems list has a Fix… button, and **Fix all I can…** sits at the top. The app keeps every dot of the set exactly where it is and works out which students of the same instrument should trade spots so the largest step is as small as possible and nobody's path crosses. Each student takes the other's path for the rest of the show, so every later move looks the same — only the move into that set changes.
   - Review before applying: each set lists who trades and how many problems it fixes; the field zooms in and shows old paths (red dashed) and new paths (green).

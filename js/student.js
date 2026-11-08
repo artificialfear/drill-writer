@@ -2,7 +2,7 @@
 // Show source: ?show=<name> loads shows/<name>.json (published, session 3); otherwise the show saved by
 // the editor on this device (used by "Preview as student", which also live-updates while the editor changes).
 import {
-  FIELD_DEPTH, normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
+  FIELD_DEPTH, moveStep, moveTiming, timingText, normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { css, drawField, shapePath, propCorners } from './fieldDraw.js';
 import { technique } from './technique.js';
@@ -81,7 +81,8 @@ const me = () => st.show.performers.find(p => p.id === st.me);
 function myMove(i) { // move INTO set i: step size + technique
   if (i === 0) return null;
   const A = st.show.sets[i - 1].pos[st.me], B = st.show.sets[i].pos[st.me];
-  const mv = stepSize(A, B, st.show.sets[i].counts);
+  const mv = moveStep(st.show, i, st.me);
+  mv.timing = timingText(mv);
   mv.tech = technique(sectionByKey(me().section).family, A, B);
   return mv;
 }
@@ -99,6 +100,7 @@ function render() {
     chips.push(`<span class="chip">${set.counts} counts from set ${esc(sets[st.cur - 1].name)}</span>`);
     if (mv.dist < 0.01) chips.push('<span class="chip hold">HOLD</span>');
     else {
+      if (mv.timing) chips.push(`<span class="chip hold">⏱ ${mv.timing}</span>`);
       chips.push(`<span class="chip tech">${mv.tech.label}</span>`);
       chips.push(`<span class="chip${mv.big ? ' big' : ''}">${mv.label}${mv.big ? ' — big step!' : ''}</span>`);
     }
@@ -115,7 +117,7 @@ function render() {
     const n = sets[st.cur + 1], nm = myMove(st.cur + 1);
     $('nextInfo').innerHTML = nm.dist < 0.01
       ? `Next: <strong>hold ${n.counts}</strong> into set ${esc(n.name)}`
-      : `Next: <strong>${n.counts} counts</strong> to set ${esc(n.name)} · <strong>${nm.tech.label}</strong> · ${nm.label}${nm.big ? ' ⚠' : ''}`;
+      : `Next: <strong>${nm.timing || `${n.counts} counts`}</strong> to set ${esc(n.name)} · <strong>${nm.tech.label}</strong> · ${nm.label}${nm.big ? ' ⚠' : ''}`;
   } else $('nextInfo').textContent = 'Last set of the show.';
   $('prevSet').disabled = st.cur === 0; $('nextSet').disabled = st.cur === sets.length - 1;
   renderSheet(); renderNear(); updateClock(); draw();
@@ -125,7 +127,7 @@ function renderSheet() {
   $('sheetTitle').textContent = `${p.label} · ${sectionByKey(p.section).name} — ${st.show.title}`;
   $('sheetBody').innerHTML = sets.map((s, i) => {
     const q = s.pos[st.me], mv = myMove(i);
-    const step = !mv ? '' : mv.dist < 0.01 ? '<td class="hold">Hold</td>' : `<td class="${mv.big ? 'big' : ''}">${mv.label}<br><span class="tech-s">${mv.tech.label}</span></td>`;
+    const step = !mv ? '' : mv.dist < 0.01 ? '<td class="hold">Hold</td>' : `<td class="${mv.big ? 'big' : ''}">${mv.label}<br><span class="tech-s">${mv.timing ? mv.timing + ' · ' : ''}${mv.tech.label}</span></td>`;
     return `<tr class="${i === st.cur ? 'cur' : ''}"><td>${esc(s.name)}</td><td>${i ? s.counts : '—'}</td><td>${esc(describeX(q.x))}</td><td>${esc(describeY(q.y, st.show.field))}</td>${step || '<td></td>'}</tr>`;
   }).join('');
 }
@@ -354,8 +356,10 @@ function renderBigCount({ phase, count, beatNum, run }) {
     const L = locate(st.show, count), total = sets[L.i + 1].counts, into = count - starts[L.i], cur = Math.min(total, Math.floor(into) + 1);
     const rhs = settings();
     if (rhs.countMode === 'down') { n = String(total - cur + 1); of = 'left'; } else { n = String(cur); of = `/${total}`; }
-    const hold = myHold(L.i);
-    sub = hold ? 'HOLD' : `To set ${sets[L.i + 1].name}`;
+    const tm = moveTiming(st.show, L.i + 1, st.me), still = myHold(L.i);
+    const waiting = !still && tm.pre && into < tm.pre, early = !still && tm.post && into >= total - tm.post;
+    const hold = still || waiting || early;
+    sub = still ? 'HOLD' : waiting ? `HOLD — go on ${tm.pre + 1}` : early ? `HOLD — you're there` : `To set ${sets[L.i + 1].name}`;
     next = nextLine(L.i);
     if (hold) cls += ' hold';
     if (total >= 4 && cur > total - 4) cls += ' arriving';

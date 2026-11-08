@@ -209,8 +209,25 @@ with sync_playwright() as p:
     check('OK hides a flagged collision', page.locator('#problems li.x:not(.ok)').count() == 1 and page.locator('#problems li.ok').count() == 1)
     page.click('#problems li.ok button[data-a=unok]')
     check('Undo OK flags it again', page.locator('#problems li.x:not(.ok)').count() == 2)
-    page.click('#problems li.x >> nth=0 >> button[data-a=fix]')
-    check('Fix explains when swapping cannot help (two instruments)', 'can' in page.inner_text('#toast').lower())
+    page.click('#problems li.x >> nth=0 >> button[data-a=fix]'); page.wait_for_selector('#fixApply')
+    check('Fix suggests a hold when two instruments cross', 'hold' in page.inner_text('#dropBody').lower())
+    page.screenshot(path=f'{SHOTS}/21-fix-hold.png')
+    page.click('#fixApply'); page.wait_for_selector('#fixDone')
+    check('the hold clears that collision', page.locator('#problems li.x:not(.ok)').count() == 1)
+    page.click('#fixDone'); page.keyboard.press('Control+z')
+
+    # write a hold by hand: select one student on set 2, hold 4 then move
+    page.locator('#tlTrack .tl-block').nth(1).click()
+    tid = page.evaluate("__dw.show.performers.find(p=>p.label==='T1').id")
+    page.evaluate(f"__dw.sel = new Set(['{tid}'])"); page.evaluate("document.querySelector('#field').dispatchEvent(new Event('pointerleave'))")
+    page.click('#btnStop'); page.locator('#tlTrack .tl-block').nth(1).click(); page.wait_for_timeout(100)
+    page.click('#sbTiming'); page.fill('#tmPre', '4'); page.click('#tmApply')
+    check('timing saved on the move into set 2', page.evaluate(f"JSON.stringify(__dw.show.sets[1].timing['{tid}'])") == '{"pre":4,"post":0}')
+    held = page.evaluate(f"import('./js/model.js').then(m => {{ const a = __dw.show.sets[0].pos['{tid}'], q3 = m.positionsAt(__dw.show, 3).pos['{tid}'], q14 = m.positionsAt(__dw.show, 14).pos['{tid}']; return [Math.hypot(q3.x-a.x,q3.y-a.y), Math.hypot(q14.x-a.x,q14.y-a.y)] }})")
+    check('during the hold the student stays on their set-1 spot, then moves', held[0] < 1e-6 and held[1] > 0.1)
+    page.click('.tab[data-tab=info]')
+    check('Dot tab shows the hold', 'Hold 4, then 20' in page.inner_text('#dotInfo'))
+    page.click('.tab[data-tab=sets]'); page.keyboard.press('Control+z')
 
     # auto-fix: six trumpets whose paths all cross
     import tempfile
