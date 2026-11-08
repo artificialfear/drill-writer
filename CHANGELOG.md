@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.1 — 2026-11-07
+- **Set slider** on the student view: a bar along the bottom of the field with a tick and number for every set. Drag the orange handle to slide through the whole show — dots move in between sets as you slide, and the handle sticks to a set when you get close so landing on one is easy. A bubble shows where you are ("Set 5" or "4 → 5"). Long shows label every 2nd or 5th set.
+
 ## 0.10.0 — 2026-11-07
 - **Student view is built for landscape.** Sideways, the field fills the left of the screen and the set card, tabs and Play / Stop / Practice sit on the right.
 - Holding a phone upright shows "Turn your phone sideways", with a small "Keep it upright anyway" button for students whose rotation lock is on.

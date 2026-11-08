@@ -330,6 +330,17 @@ with sync_playwright() as p:
     pv.wait_for_selector('#mainScreen:not([hidden])')
     check('preview opens straight to the chosen student and set', pv.inner_text('#whoLabel') == 'G3' and pv.inner_text('#setName') == '2' and pv.is_visible('#previewBanner'))
     pv.screenshot(path=f'{SHOTS}/s8-preview-guard.png')
+    # set slider
+    sp.click('#v2d'); tb = sp.locator('#scrubber .sc-track').bounding_box()
+    sp.mouse.move(tb['x'] + 2, tb['y'] + 3); sp.mouse.down()
+    sp.mouse.move(tb['x'] + tb['width'] * 0.25, tb['y'] + 3, steps=6)
+    check('sliding shows the drill moving between sets', 0 < sp.evaluate('__sv.count') < 24 and sp.is_visible('#scrubber .sc-bubble'))
+    sp.screenshot(path=f'{SHOTS}/s11-slider.png')
+    sp.mouse.move(tb['x'] + tb['width'] * 0.5 + 1, tb['y'] + 3, steps=4)
+    check('slider snaps onto a set when close', sp.evaluate('__sv.count') == 24 and sp.inner_text('#setName') == '2')
+    sp.mouse.move(tb['x'] + tb['width'] - 1, tb['y'] + 3, steps=4); sp.mouse.up()
+    check('slider reaches the last set', sp.inner_text('#setName') == '3')
+
     # zoom in on my dot
     sp.click('#zoomMe'); span0 = sp.evaluate('__sv.span'); sp.click('#zoomIn'); sp.click('#zoomIn')
     check('+ zooms in closer to my dot', sp.evaluate('__sv.span') < span0)

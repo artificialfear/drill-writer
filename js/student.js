@@ -236,7 +236,55 @@ function goSet(i) {
   $('bigCount').hidden = true;
   render();
 }
+// ---------- set slider ----------
+let scrubKey = '';
+function renderScrubber() {
+  const total = Math.max(1, totalCounts(st.show)), starts = setStarts(st.show), sets = st.show.sets;
+  const key = starts.join(',') + '|' + sets.map(x => x.name).join(',');
+  if (key === scrubKey) return;
+  scrubKey = key;
+  const every = sets.length > 40 ? 5 : sets.length > 16 ? 2 : 1;   // thin out labels on long shows
+  $('scrubber').querySelector('.sc-ticks').innerHTML = sets.map((x, i) => {
+    const left = (starts[i] / total) * 100;
+    return `<i style="left:${left}%"></i>` + (i % every === 0 || i === sets.length - 1 ? `<b style="left:${left}%">${esc(x.name)}</b>` : '');
+  }).join('');
+}
+function updateScrubber() {
+  if (!st.show) return;
+  renderScrubber();
+  const total = Math.max(1, totalCounts(st.show)), pct = Math.min(100, (st.count / total) * 100);
+  const el = $('scrubber');
+  el.querySelector('.sc-thumb').style.left = `${pct}%`;
+  el.querySelector('.sc-fill').style.width = `${pct}%`;
+  const L = locate(st.show, st.count), sets = st.show.sets;
+  el.querySelector('.sc-bubble').textContent = L.frac ? `${sets[L.i].name} → ${sets[L.i + 1].name}` : `Set ${sets[L.i].name}`;
+  el.setAttribute('aria-valuetext', el.querySelector('.sc-bubble').textContent);
+}
+function scrubToX(clientX) {
+  const r = $('scrubber').querySelector('.sc-track').getBoundingClientRect();
+  const total = totalCounts(st.show), starts = setStarts(st.show);
+  let c = Math.max(0, Math.min(1, (clientX - r.left) / r.width)) * total;
+  // stick to a set when you're close to it, so landing on one is easy
+  const near = starts.reduce((b, v) => Math.abs(v - c) < Math.abs(b - c) ? v : b, starts[0]);
+  if (Math.abs(near - c) <= Math.max(0.6, total * 0.008)) c = near;
+  st.count = c; st.replay = false;
+  const i = locate(st.show, c).i;
+  if (i !== st.cur) { st.cur = i; render(); } else { updateClock(); draw(); }
+}
+function wireScrubber() {
+  const el = $('scrubber');
+  el.addEventListener('pointerdown', e => {
+    e.stopPropagation(); el.setPointerCapture(e.pointerId);
+    stopAll(); $('bigCount').hidden = true;
+    el.classList.add('dragging'); scrubToX(e.clientX);
+  });
+  el.addEventListener('pointermove', e => { if (el.classList.contains('dragging')) scrubToX(e.clientX); });
+  const end = () => el.classList.remove('dragging');
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+
 function updateClock() {
+  updateScrubber();
   const L = locate(st.show, st.count), sets = st.show.sets;
   $('clock').textContent = L.frac ? `${sets[L.i].name}→${sets[L.i + 1].name}` : `Set ${sets[st.cur].name}`;
 }
@@ -434,6 +482,7 @@ function wire() {
   $('nextSet').onclick = () => goSet(st.cur + 1);
   $('playBtn').onclick = () => st.playing ? (stopAll(), render()) : play();
   $('practiceBtn').onclick = openPractice;
+  wireScrubber();
   $('stopBtn').onclick = stopToStart;
   window.__svPick = id => { if (st.show && st.show.performers.some(p => p.id === id)) pickMe(id); };
   $('pFrom').onchange = updatePct; $('pPct').oninput = updatePct;

@@ -200,3 +200,13 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
   .big-count .bc-main { font-size: 44px; }
   .preview-banner { position: fixed; top: 0; left: 0; right: 0; }
 }
+
+/* ---------- set slider (bottom of the field) ---------- */
+.scrubber { position: absolute; left: 12px; right: 12px; bottom: 56px; height: 34px; z-index: 3; touch-action: none; cursor: pointer; }
+.sc-track { position: absolute; left: 0; right: 0; top: 14px; height: 6px; border-radius: 3px; background: color-mix(in srgb, var(--panel) 75%, transparent); box-shadow: 0 0 0 1px var(--line); }
+.sc-fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--accent); }
+.sc-ticks i { position: absolute; top: -5px; width: 2px; height: 16px; margin-left: -1px; background: var(--ink); opacity: .55; border-radius: 1px; }
+.sc-ticks b { position: absolute; top: -21px; transform: translateX(-50%); font-size: 11px; font-weight: 700; color: var(--ink); text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); pointer-events: none; }
+.sc-thumb { position: absolute; top: -9px; width: 24px; height: 24px; margin-left: -12px; border-radius: 50%; background: var(--me); border: 3px solid var(--panel); box-shadow: 0 1px 4px rgba(0,0,0,.35); }
+.sc-bubble { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); white-space: nowrap; background: var(--ink); color: var(--bg); font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 6px; opacity: 0; transition: opacity .15s; pointer-events: none; }
+.scrubber.dragging .sc-bubble { opacity: 1; }
