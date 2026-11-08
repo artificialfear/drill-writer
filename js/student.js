@@ -2,10 +2,11 @@
 // Show source: ?show=<name> loads shows/<name>.json (published, session 3); otherwise the show saved by
 // the editor on this device (used by "Preview as student", which also live-updates while the editor changes).
 import {
-  normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
+  FIELD_DEPTH, normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { css, drawField, shapePath, propCorners } from './fieldDraw.js';
 import { technique } from './technique.js';
+import { formOf } from './drop.js';
 import { createRehearsal, DEFAULT_SETTINGS, COUNTOFF_PRESETS } from './rehearse.js';
 
 const $ = id => document.getElementById(id);
@@ -18,8 +19,9 @@ const POV_KEY = 'drillwriter.pov';
 let savedPov = 'performer'; try { savedPov = localStorage.getItem(POV_KEY) || 'performer'; } catch (e) {}
 // pov: 'performer' = as the student sees it facing the audience (front at the top, Side 1 on the right);
 //      'director'  = from the press box (front at the bottom, Side 1 on the left)
-const st = { show: null, me: null, cur: 0, count: 0, playing: false, zoom: 'me', span: 34, mode: '2d', v3: null, pov: savedPov === 'director' ? 'director' : 'performer' };
+const st = { show: null, me: null, cur: 0, count: 0, playing: false, zoom: 'me', zf: 1, mode: '2d', v3: null, pov: savedPov === 'director' ? 'director' : 'performer' };
 window.__sv = st;
+st.view = null; // set below
 
 // ---------- loading ----------
 async function loadShow() {
@@ -156,20 +158,55 @@ function renderNear() {
 const canvas = $('fieldCanvas'), ctx = canvas.getContext('2d');
 let W = 0, H = 0, DPR = 1;
 const view = { scale: 4, ox: 0, oy: 0 };
+st.view = view;
 function resize() {
   const r = canvas.getBoundingClientRect();
   DPR = window.devicePixelRatio || 1; W = r.width; H = r.height;
   canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
   draw();
 }
+// "Me" view frames the student's form plus the nearest yard-line numbers and the yard lines on
+// either side of them. During a move it frames both ends of the move so the picture doesn't jump.
+const NUM_ROWS = [19.2, FIELD_DEPTH - 19.2]; // yard-number rows, steps from the front sideline
+const boxCache = new Map();
+function setBox(i) {
+  const key = `${i}|${st.me}`;
+  if (boxCache.has(key)) return boxCache.get(key);
+  const pos = st.show.sets[i].pos, M = pos[st.me];
+  const chain = formOf(st.show, i, st.me);
+  // my form, plus whoever is close around me (a block's other rows, a neighboring form)
+  const near = st.show.performers.filter(p => { const q = pos[p.id]; return Math.hypot(q.x - M.x, q.y - M.y) <= (chain ? 8 : 10); }).map(p => p.id);
+  const ids = [...new Set([...(chain ? chain.ids : []), ...near])];
+  let x0 = M.x - 9, x1 = M.x + 9, y0 = M.y - 4, y1 = M.y + 4; // ≥ one yard line each side
+  for (const id of ids) { const q = pos[id]; if (!q) continue; x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); }
+  const row = NUM_ROWS.reduce((b, r) => Math.abs(r - M.y) < Math.abs(b - M.y) ? r : b);
+  y0 = Math.min(y0, row - 2.5); y1 = Math.max(y1, row + 2.5);
+  const box = { x0: x0 - 3, x1: x1 + 3, y0: y0 - 3, y1: y1 + 3 };
+  boxCache.set(key, box);
+  return box;
+}
+function targetBox() {
+  const L = locate(st.show, st.count), a = setBox(L.i);
+  if (!(L.frac > 0 || st.playing) || L.i >= st.show.sets.length - 1) return a;
+  const b = setBox(L.i + 1);
+  return { x0: Math.min(a.x0, b.x0), x1: Math.max(a.x1, b.x1), y0: Math.min(a.y0, b.y0), y1: Math.max(a.y1, b.y1) };
+}
+let curBox = null;
 function fitView(focus) {
   const f = st.pov === 'performer' ? -1 : 1;
   view.flip = f === -1;
   if (st.zoom === 'me' && focus) {
-    // st.span = how many steps fit across the short side of the screen (smaller = closer)
-    view.scale = Math.min(W / (st.span * 1.5), H / st.span);
-    view.ox = W / 2 - f * focus.x * view.scale;
-    view.oy = H * (W > H ? 0.55 : 0.58) + f * focus.y * view.scale; // a little below center, so more of the field ahead shows
+    const t = targetBox();
+    // ease toward a new framing while playing; jump when stepping between sets
+    if (!curBox || !st.playing) curBox = { ...t };
+    else for (const k of ['x0', 'x1', 'y0', 'y1']) curBox[k] += (t[k] - curBox[k]) * 0.08;
+    const top = 6, bottom = 98; // keep clear of the slider and buttons along the bottom
+    const aw = W - 12, ah = Math.max(60, H - top - bottom);
+    const bw = curBox.x1 - curBox.x0, bh = curBox.y1 - curBox.y0;
+    view.scale = Math.min(aw / bw, ah / bh, 40) / st.zf;
+    const cx = (curBox.x0 + curBox.x1) / 2, cy = (curBox.y0 + curBox.y1) / 2;
+    view.ox = W / 2 - f * cx * view.scale;
+    view.oy = top + ah / 2 + f * cy * view.scale;
   } else {
     view.scale = Math.min((W - 12) / 200, (H - 12) / 104);
     view.ox = W / 2; view.oy = H / 2 + f * 40.7 * view.scale;
@@ -443,16 +480,16 @@ async function setMode(mode) {
 function syncZoomBtns() {
   $('zoomMe').classList.toggle('on', st.zoom === 'me'); $('zoomAll').classList.toggle('on', st.zoom === 'all');
 }
-function setZoom(z, span) {
-  st.zoom = z; if (span) st.span = span;
+function setZoom(z, zf) {
+  st.zoom = z; if (zf) st.zf = zf;
   syncZoomBtns();
   if (st.v3) st.v3.setCamera(z === 'me' ? null : (st.pov === 'performer' ? 'backfield' : 'press'));
   draw();
 }
 function zoomBy(k) {
-  if (st.zoom === 'all') { if (k < 1) setZoom('me', 60); return; }
-  st.span = Math.max(8, Math.min(90, st.span * k));
-  if (st.span >= 90 && k > 1) return setZoom('all');
+  if (st.zoom === 'all') { if (k < 1) setZoom('me', 1.6); return; }
+  st.zf = Math.max(0.3, Math.min(3, st.zf * k));
+  if (st.zf >= 3 && k > 1) return setZoom('all');
   syncZoomBtns(); draw();
 }
 
@@ -487,7 +524,7 @@ function wire() {
   window.__svPick = id => { if (st.show && st.show.performers.some(p => p.id === id)) pickMe(id); };
   $('pFrom').onchange = updatePct; $('pPct').oninput = updatePct;
   $('practiceDlg').addEventListener('close', () => { if ($('practiceDlg').returnValue === 'go') goPractice(); });
-  $('zoomMe').onclick = () => setZoom('me', 34);
+  $('zoomMe').onclick = () => setZoom('me', 1);
   $('zoomAll').onclick = () => setZoom('all');
   $('zoomIn').onclick = () => zoomBy(1 / 1.4);
   $('zoomOut').onclick = () => zoomBy(1.4);
@@ -507,8 +544,8 @@ function wire() {
     if (pts.size === 1) sx0 = e.clientX;
     if (pts.size === 2) {
       const [a, b] = [...pts.values()]; sx0 = null;
-      if (st.zoom === 'all') { st.zoom = 'me'; st.span = 70; syncZoomBtns(); }
-      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), span0: st.span };
+      if (st.zoom === 'all') { st.zoom = 'me'; st.zf = 2; syncZoomBtns(); }
+      pinch = { d0: Math.hypot(a.x - b.x, a.y - b.y), zf0: st.zf };
     }
   });
   canvas.addEventListener('pointermove', e => {
@@ -516,13 +553,13 @@ function wire() {
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pinch && pts.size === 2) {
       const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      st.span = Math.max(8, Math.min(90, pinch.span0 * pinch.d0 / Math.max(10, d)));
+      st.zf = Math.max(0.3, Math.min(3, pinch.zf0 * pinch.d0 / Math.max(10, d)));
       draw();
     }
   });
   const up = e => {
     pts.delete(e.pointerId);
-    if (pinch) { if (pts.size === 0) { pinch = null; if (st.span > 85) setZoom('all'); } return; }
+    if (pinch) { if (pts.size === 0) { pinch = null; if (st.zf > 2.8) setZoom('all'); } return; }
     if (sx0 == null) return;
     const dx = e.clientX - sx0; sx0 = null;
     if (Math.abs(dx) > 50 && !st.playing) { goSet(st.cur + (dx < 0 ? 1 : -1)); return; }
@@ -553,7 +590,7 @@ function wire() {
       if (e.key !== STORE_KEY || !e.newValue) return;
       const show = normalizeShow(JSON.parse(e.newValue));
       const keepCur = Math.min(st.cur, show.sets.length - 1);
-      st.show = show;
+      st.show = show; boxCache.clear(); curBox = null;
       if (!me()) return showPicker();
       if (!st.playing) { st.cur = keepCur; st.count = setStarts(st.show)[st.cur]; render(); }
     });

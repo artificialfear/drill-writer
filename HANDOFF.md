@@ -91,7 +91,7 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 ## Landscape student view (v0.10)
 - Mat asked for the student view to be locked landscape. Reality: only Android Chrome can lock (`requestFullscreen` + `screen.orientation.lock('landscape')`, needs a tap → done in `pickMe` and the ⛶ button). iOS Safari cannot lock from a web page, and ignores manifest orientation; the portrait prompt (`#rotateHint`, CSS `orientation: portrait` + `max-width: 640px`, body.has-main) covers it, with "Keep it upright anyway" (sessionStorage) for rotation-locked phones.
 - Landscape layout = CSS grid in `@media (orientation: landscape) and (max-height: 560px)`: stage left, top/tabs/panel/controls right.
-- Zoom: `st.zoom` 'me'|'all', `st.span` = steps across the short side (default 34, 8–90). + / − (`zoomBy`), pinch (two pointers), wheel, double-tap toggles. Swipe = change set (one finger only).
+- Zoom: `st.zoom` 'me'|'all'; 'me' = auto framing `setBox(i)` (form via `formOf()` from drop.js + anyone within 8 steps + nearest yard-number row (19.2 / 66.1) + ±9 steps around the student), union of both sets during a move, eased while playing; `st.zf` multiplies it (1 = auto, 0.3–3; ≥3 → Field). + / − (`zoomBy`), pinch (two pointers), wheel, double-tap toggles. Swipe = change set (one finger only).
 - `manifest.webmanifest` (start_url student.html, display fullscreen, orientation landscape) + `icons/icon-192/512.png`.
 
 ## Decisions Mat made

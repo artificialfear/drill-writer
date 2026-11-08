@@ -330,6 +330,20 @@ with sync_playwright() as p:
     pv.wait_for_selector('#mainScreen:not([hidden])')
     check('preview opens straight to the chosen student and set', pv.inner_text('#whoLabel') == 'G3' and pv.inner_text('#setName') == '2' and pv.is_visible('#previewBanner'))
     pv.screenshot(path=f'{SHOTS}/s8-preview-guard.png')
+    # default "Me" zoom frames my form and the nearest yard numbers
+    sp.click('#v2d'); sp.click('#zoomMe'); sp.wait_for_timeout(200)
+    vis = sp.evaluate('''(() => {
+      const v = __sv.view, f = v.flip ? -1 : 1, c = document.querySelector('#fieldCanvas').getBoundingClientRect();
+      const X = x => v.ox + f * x * v.scale, Y = y => v.oy - f * y * v.scale;
+      const set = __sv.show.sets[__sv.cur], me = set.pos[__sv.me];
+      const row = [19.2, 85.333 - 19.2].reduce((b, r) => Math.abs(r - me.y) < Math.abs(b - me.y) ? r : b);
+      const inV = (x, y) => X(x) >= 0 && X(x) <= c.width && Y(y) >= 0 && Y(y) <= c.height;
+      const lines = [-80,-72,-64,-56,-48,-40,-32,-24,-16,-8,0,8,16,24,32,40,48,56,64,72,80].filter(x => X(x) >= 0 && X(x) <= c.width).length;
+      return { numbers: inV(me.x, row), me: inV(me.x, me.y), lines };
+    })()''')
+    check('default zoom shows my dot, the nearest yard numbers and at least two yard lines', vis['numbers'] and vis['me'] and vis['lines'] >= 2)
+    sp.screenshot(path=f'{SHOTS}/s12-default-zoom.png')
+
     # set slider
     sp.click('#v2d'); tb = sp.locator('#scrubber .sc-track').bounding_box()
     sp.mouse.move(tb['x'] + 2, tb['y'] + 3); sp.mouse.down()
@@ -342,8 +356,8 @@ with sync_playwright() as p:
     check('slider reaches the last set', sp.inner_text('#setName') == '3')
 
     # zoom in on my dot
-    sp.click('#zoomMe'); span0 = sp.evaluate('__sv.span'); sp.click('#zoomIn'); sp.click('#zoomIn')
-    check('+ zooms in closer to my dot', sp.evaluate('__sv.span') < span0)
+    sp.click('#zoomMe'); zf0 = sp.evaluate('__sv.zf'); sp.click('#zoomIn'); sp.click('#zoomIn')
+    check('+ zooms in closer to my dot', sp.evaluate('__sv.zf') < zf0)
     sp.click('#zoomAll'); check('Field shows the whole field', sp.evaluate('__sv.zoom') == 'all')
     sp.click('#zoomIn'); check('+ from Field zooms back to my dot', sp.evaluate('__sv.zoom') == 'me')
     sp.screenshot(path=f'{SHOTS}/s9-landscape.png')

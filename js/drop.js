@@ -94,6 +94,13 @@ function cleanMoves(st, moves) {
   return moves;
 }
 
+// The form a performer is part of in a set (saved form, else evenly spaced neighbors), or null.
+export function formOf(show, setIdx, pid) {
+  const st = show.sets[setIdx];
+  if (!st || !st.pos[pid]) return null;
+  return savedChain(st, pid) || detectChain(st, pid, show.performers.map(p => p.id));
+}
+
 export function planSet(show, setIdx, pid) {
   const st = show.sets[setIdx];
   const allIds = show.performers.map(p => p.id);

@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.10.2 — 2026-11-08
+- Student view "Me" zoom now frames the student's whole form, the people right around them, the nearest row of yard-line numbers, and at least the yard lines on either side — no more zooming out to find where you are. While playing it frames both ends of the move and eases between moves instead of jumping. + / − / pinch still zoom from there, and **Me** returns to this framing.
+
 ## 0.10.1 — 2026-11-07
 - **Set slider** on the student view: a bar along the bottom of the field with a tick and number for every set. Drag the orange handle to slide through the whole show — dots move in between sets as you slide, and the handle sticks to a set when you get close so landing on one is easy. A bubble shows where you are ("Set 5" or "4 → 5"). Long shows label every 2nd or 5th set.
 
