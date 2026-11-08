@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0 — 2026-11-08
+- **Collision check.** The app works out where every pair of marchers comes closest during each move and warns when they'd bump: closer than 1 step center to center for winds and guard, more room for battery (drums) and front ensemble. Spacing that's written into a set (a tight 1-step form) is not flagged — only collisions in the middle of a move.
+  - Timeline: a red ✕ and red top edge on any set whose move has a collision. Sets list: ✕ before the set name.
+  - Sitting on a set: a red ✕ on the field where the two meet, labeled with who and the count ("T2×M4 ct 20"), with dashed circles where each of them is at that moment.
+  - While playing or scrubbing: thick red rings on the two marchers for the count or so around the bump.
+  - **Problems** list in the Sets tab: every collision and every step bigger than 6 to 5 in the show. Click a collision to jump to the exact moment they meet with both selected; click a big step to go to that set with the student selected.
+  - Student view: "⚠ Watch T5 around count 9" on the set where that student has a collision.
+
 ## 0.10.2 — 2026-11-08
 - Student view "Me" zoom now frames the student's whole form, the people right around them, the nearest row of yard-line numbers, and at least the yard lines on either side — no more zooming out to find where you are. While playing it frames both ends of the move and eases between moves instead of jumping. + / − / pinch still zoom from there, and **Me** returns to this framing.
 

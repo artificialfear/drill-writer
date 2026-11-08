@@ -7,6 +7,7 @@ import {
 import { css, drawField, shapePath, propCorners } from './fieldDraw.js';
 import { technique } from './technique.js';
 import { formOf } from './drop.js';
+import { collisionsInto } from './checks.js';
 import { createRehearsal, DEFAULT_SETTINGS, COUNTOFF_PRESETS } from './rehearse.js';
 
 const $ = id => document.getElementById(id);
@@ -102,6 +103,10 @@ function render() {
       chips.push(`<span class="chip${mv.big ? ' big' : ''}">${mv.label}${mv.big ? ' — big step!' : ''}</span>`);
     }
     if (set.bpm) chips.push(`<span class="chip">♩ = ${set.bpm}</span>`);
+    for (const c of collisionsInto(st.show, st.cur).filter(c => c.a.id === st.me || c.b.id === st.me)) {
+      const other = c.a.id === st.me ? c.b : c.a;
+      chips.push(`<span class="chip big">⚠ Watch ${esc(other.label)} around count ${c.count}</span>`);
+    }
   }
   $('chips').innerHTML = chips.join('');
   $('setNote').hidden = !set.note; $('setNote').textContent = set.note || '';

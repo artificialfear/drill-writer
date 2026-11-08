@@ -94,6 +94,11 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Zoom: `st.zoom` 'me'|'all'; 'me' = auto framing `setBox(i)` (form via `formOf()` from drop.js + anyone within 8 steps + nearest yard-number row (19.2 / 66.1) + ±9 steps around the student), union of both sets during a move, eased while playing; `st.zf` multiplies it (1 = auto, 0.3–3; ≥3 → Field). + / − (`zoomBy`), pinch (two pointers), wheel, double-tap toggles. Swipe = change set (one finger only).
 - `manifest.webmanifest` (start_url student.html, display fullscreen, orientation landscape) + `icons/icon-192/512.png`.
 
+## Collision check (`js/checks.js`)
+- Straight-line, constant-speed paths → exact closest approach per pair: t* = −(r0·v)/|v|². Flag if 0.02 < t* < 0.98, dist < reachA + reachB (winds/guard/DM 0.5, battery 0.65, pit 0.8 steps), and dist < min(start, end spacing) − 0.25 (so written tight spacing isn't flagged). Holds and moving-together pairs are skipped (v≈0).
+- Editor caches `collisions()` per set; `changed()` clears it. Problems list (`renderProblems`, Sets tab) = collisions + big steps, clickable. Timeline/set list classes `.collide`. Field markers drawn in `draw()`; bump rings when |frac − t*|·counts < 1.2.
+- Not yet in Drop/Add reports (Problems list catches anything new). Props and guard equipment swing aren't checked.
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):

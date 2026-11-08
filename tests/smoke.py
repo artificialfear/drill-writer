@@ -190,6 +190,17 @@ with sync_playwright() as p:
     page.click('#addApply'); page.click('#addDone')
     check('filling the spot moves nobody and clears it', page.evaluate('__dw.show.sets.every(s=>s.holes.length===0)'))
 
+    # collision check (the sample show has two collisions in the move into set 2)
+    page.set_viewport_size({'width': 1440, 'height': 860})
+    page.click('#btnSample'); page.wait_for_timeout(200); page.click('.tab[data-tab=sets]')
+    check('collisions are marked on the timeline', page.locator('#tlTrack .tl-block.collide').count() == 1)
+    check('problems list names the collisions', page.locator('#problems li.x').count() == 2 and 'count' in page.inner_text('#problems li.x >> nth=0'))
+    page.click('#problems li.x >> nth=0'); page.wait_for_timeout(200)
+    check('clicking a collision jumps to the moment they meet with both selected', page.evaluate('__dw.sel.size') == 2 and 0 < page.evaluate('__dw.count') < 24)
+    page.screenshot(path=f'{SHOTS}/18-collision-moment.png')
+    page.locator('#tlTrack .tl-block').nth(1).click(); page.wait_for_timeout(150)
+    page.screenshot(path=f'{SHOTS}/19-collision-set.png')
+
     # timeline + floating selection bar (sample show: 3 sets, 24 + 24 counts)
     page.set_viewport_size({'width': 1440, 'height': 860})
     page.click('#btnSample'); page.wait_for_timeout(200)

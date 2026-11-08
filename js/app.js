@@ -6,6 +6,7 @@ import {
 } from './model.js';
 import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
 import { technique } from './technique.js';
+import { collisionsInto } from './checks.js';
 import { css, drawField as drawFieldShared, shapePath as shapePathShared, propCorners } from './fieldDraw.js';
 import { createRehearsal, COUNTOFF_PRESETS, SOUNDS, DEFAULT_SETTINGS } from './rehearse.js';
 
@@ -80,6 +81,7 @@ function loadShow(show, keepUndo = false) {
 
 // Call after any edit. Re-renders panels + canvas and autosaves.
 function changed(save = true) {
+  collCache = null;
   $('showTitle').value = state.show.title;
   $('hashSelect').value = state.show.field.hash;
   $('bpm').value = state.show.tempo.bpm;
@@ -191,6 +193,32 @@ function draw() {
     }
   }
 
+  // collisions: where pairs meet during the move into this set (sitting on a set)…
+  const dragging = state.pointer && state.pointer.kind === 'drag';
+  if (editing && prev && !dragging) {
+    ctx.save();
+    for (const c of collisions()[state.cur]) {
+      const A = curSet().pos, P = prev.pos, t = c.t;
+      const pa = { x: P[c.a.id].x + (A[c.a.id].x - P[c.a.id].x) * t, y: P[c.a.id].y + (A[c.a.id].y - P[c.a.id].y) * t };
+      const pb = { x: P[c.b.id].x + (A[c.b.id].x - P[c.b.id].x) * t, y: P[c.b.id].y + (A[c.b.id].y - P[c.b.id].y) * t };
+      const X = sx(c.at.x), Y = sy(c.at.y), k = Math.max(6, 0.9 * s);
+      ctx.strokeStyle = warn; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(X - k, Y - k); ctx.lineTo(X + k, Y + k); ctx.moveTo(X + k, Y - k); ctx.lineTo(X - k, Y + k); ctx.stroke();
+      ctx.lineWidth = 1.5; ctx.setLineDash([3, 3]);
+      ctx.beginPath(); ctx.arc(sx(pa.x), sy(pa.y), Math.max(4, 0.6 * s), 0, Math.PI * 2); ctx.arc(sx(pb.x), sy(pb.y), Math.max(4, 0.6 * s), 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = warn; ctx.font = `700 ${Math.max(10, Math.min(13, 1.1 * s))}px system-ui, sans-serif`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(`${c.a.label}×${c.b.label} ct ${c.count}`, X + k + 3, Y);
+    }
+    ctx.restore();
+  }
+  // …and, while a move plays or is scrubbed, who is about to bump right now
+  const bumping = new Set();
+  if (!editing && snap.frac > 0) {
+    const i = snap.i + 1, len = show.sets[i].counts || 1;
+    for (const c of collisions()[i]) if (Math.abs(snap.frac - c.t) * len < 1.2) { bumping.add(c.a.id); bumping.add(c.b.id); }
+  }
+
   // performers
   const r = Math.max(3.5, 0.75 * s);
   const nextSt = state.show.sets[Math.min(snap.i + 1, show.sets.length - 1)];
@@ -206,6 +234,7 @@ function draw() {
     if (editing && prev) big = stepSize(prev.pos[p.id], curSet().pos[p.id], counts).big;
     else if (!editing && snap.frac) big = stepSize(show.sets[snap.i].pos[p.id], nextSt.pos[p.id], nextSt.counts).big;
     if (big) { ctx.beginPath(); ctx.arc(X, Y, r + 3, 0, Math.PI * 2); ctx.strokeStyle = warn; ctx.lineWidth = 1.5; ctx.stroke(); }
+    if (bumping.has(p.id)) { ctx.beginPath(); ctx.arc(X, Y, r + 5, 0, Math.PI * 2); ctx.strokeStyle = warn; ctx.lineWidth = 3.5; ctx.stroke(); }
     if (state.sel.has(p.id)) { ctx.beginPath(); ctx.arc(X, Y, r + (big ? 6 : 3.5), 0, Math.PI * 2); ctx.strokeStyle = sel; ctx.lineWidth = 2.5; ctx.stroke(); }
     if (opt.labels && (s >= 4 || state.sel.has(p.id))) {
       ctx.fillStyle = ink; ctx.font = `600 ${Math.max(9, Math.min(13, 1.15 * s))}px system-ui, sans-serif`;
@@ -626,6 +655,12 @@ function showTab(tab) {
   document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
 }
 
+// collisions per set (move INTO that set), recomputed after each edit
+let collCache = null;
+function collisions() {
+  if (!collCache) collCache = state.show.sets.map((_, i) => collisionsInto(state.show, i));
+  return collCache;
+}
 function transitionWarnings(i) {
   if (i === 0) return 0;
   const A = state.show.sets[i - 1], B = state.show.sets[i];
@@ -639,8 +674,9 @@ function renderSets() {
   state.show.sets.forEach((st, i) => {
     const li = document.createElement('li');
     const warns = transitionWarnings(i);
-    li.className = (i === state.cur ? 'current' : '') + (warns ? ' warn' : '');
-    li.title = warns ? `${warns} performer(s) need a step bigger than 6 to 5` : `Starts at count ${starts[i]}`;
+    const hits = collisions()[i].length;
+    li.className = (i === state.cur ? 'current' : '') + (warns ? ' warn' : '') + (hits ? ' collide' : '');
+    li.title = [warns ? `${warns} performer(s) need a step bigger than 6 to 5` : '', hits ? `${hits} collision${hits === 1 ? '' : 's'} during this move` : ''].filter(Boolean).join(' · ') || `Starts at count ${starts[i]}`;
     li.innerHTML = `<span class="set-name">Set <input value="${escapeHtml(st.name)}" aria-label="Set name"></span>
       <span class="counts">${i === 0 ? '<span>start</span>' : `<input type="number" min="0" value="${st.counts}" aria-label="Counts"> cts
         ♩<input class="tempo-in" type="number" min="30" max="300" value="${st.bpm || ''}" placeholder="${state.show.tempo.bpm}" title="Tempo into this set (blank = show tempo)" aria-label="Tempo into this set">`}</span>`;
@@ -654,6 +690,7 @@ function renderSets() {
     list.appendChild(li);
   });
   $('setNote').value = curSet().note || '';
+  renderProblems();
   $('btnDelSet').disabled = state.show.sets.length < 2;
 }
 
@@ -1142,6 +1179,32 @@ function updateTransport() {
   updatePlayhead();
 }
 
+// ---------------- Problems list (Sets tab) ----------------
+function renderProblems() {
+  const box = $('problems'); if (!box) return;
+  const sets = state.show.sets, starts = setStarts(state.show), items = [];
+  collisions().forEach((list, i) => list.forEach(c => items.push({ kind: 'x', i, c,
+    text: `<b>Set ${escapeHtml(sets[i].name)}, count ${c.count}</b> — ${escapeHtml(c.a.label)} and ${escapeHtml(c.b.label)} pass ${c.dist < 0.05 ? 'right through each other' : `${Math.round(c.dist * 10) / 10} steps apart`}` })));
+  for (let i = 1; i < sets.length; i++) for (const p of state.show.performers) {
+    const ss = stepSize(sets[i - 1].pos[p.id], sets[i].pos[p.id], sets[i].counts);
+    if (ss.big) items.push({ kind: 'big', i, p, text: `<b>Set ${escapeHtml(sets[i].name)}</b> — ${escapeHtml(p.label)} needs ${ss.label}` });
+  }
+  const nx = items.filter(x => x.kind === 'x').length, nb = items.length - nx;
+  $('problemsHead').textContent = items.length ? `Problems: ${nx} collision${nx === 1 ? '' : 's'}, ${nb} big step${nb === 1 ? '' : 's'}` : 'No collisions or big steps';
+  $('problemsHead').className = items.length ? 'prob-head bad' : 'prob-head ok';
+  const MAX = 60;
+  box.innerHTML = items.slice(0, MAX).map((x, k) => `<li class="prob ${x.kind}" data-k="${k}">${x.kind === 'x' ? '✕' : '⚠'} ${x.text}</li>`).join('')
+    + (items.length > MAX ? `<li class="help">…and ${items.length - MAX} more</li>` : '');
+  box.querySelectorAll('li.prob').forEach(li => li.onclick = () => {
+    const x = items[+li.dataset.k];
+    if (x.kind === 'x') { // jump to the moment they meet, with both selected
+      state.sel = new Set([x.c.a.id, x.c.b.id]); state.selProp = null;
+      scrubTo(starts[x.i - 1] + x.c.t * sets[x.i].counts);
+      renderPerformers(); renderDotInfo(); updateTransport();
+    } else { goToSet(x.i); state.sel = new Set([x.p.id]); state.selProp = null; selectionChanged(); }
+  });
+}
+
 // ---------------- Set timeline ----------------
 // One block per set, sized by its counts (set 1 is a small "start" block). Click = go to that set,
 // drag = scrub, drag a block's right edge = change that set's counts.
@@ -1151,15 +1214,16 @@ function renderTimeline() {
   const L = locate(state.show, state.count), sitting = L.frac === 0;
   let html = '';
   sets.forEach((st, i) => {
-    const warn = transitionWarnings(i) > 0;
+    const warn = transitionWarnings(i) > 0, hits = collisions()[i].length;
     const hold = i > 0 && state.show.performers.length && state.show.performers.every(p => {
       const a = sets[i - 1].pos[p.id], b = st.pos[p.id]; return Math.hypot(a.x - b.x, a.y - b.y) < 0.01; });
     const cls = ['tl-block', i === 0 ? 'start' : '', (sitting ? i === state.cur : i === L.i + 1) ? 'current' : '', (!sitting && i === L.i) ? 'next' : '',
-      warn ? 'warn' : '', st.note ? 'note' : '', hold ? 'hold' : ''].filter(Boolean).join(' ');
+      warn ? 'warn' : '', hits ? 'collide' : '', st.note ? 'note' : '', hold ? 'hold' : ''].filter(Boolean).join(' ');
     const style = i === 0 ? '' : ` style="flex-grow:${Math.max(1, st.counts)}"`;
-    const title = i === 0 ? `Set ${st.name} · start` : `Set ${st.name} · ${st.counts} counts${warn ? ' · big steps!' : ''}${st.note ? ' · ' + st.note : ''} — drag the right edge to change counts`;
+    const title = i === 0 ? `Set ${st.name} · start` : `Set ${st.name} · ${st.counts} counts${warn ? ' · big steps!' : ''}${hits ? ` · ${hits} collision${hits === 1 ? '' : 's'}!` : ''}${st.note ? ' · ' + st.note : ''} — drag the right edge to change counts`;
     html += `<div class="${cls}" data-i="${i}"${style} title="${escapeHtml(title)}"><span class="tl-name">${escapeHtml(st.name)}</span>`
-      + (i === 0 ? '' : `<span class="tl-cts">${st.counts}</span><span class="tl-edge" data-edge="${i}"></span>`) + '</div>';
+      + (i === 0 ? '' : `<span class="tl-cts">${st.counts}</span><span class="tl-edge" data-edge="${i}"></span>`)
+      + (hits ? '<span class="tl-x" aria-hidden="true">✕</span>' : '') + '</div>';
   });
   track.innerHTML = html + '<div class="tl-head" id="tlHead"></div>';
   // keep blocks readable on long shows: about 6 px per count, at least the visible width
