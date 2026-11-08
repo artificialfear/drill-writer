@@ -96,6 +96,9 @@ with sync_playwright() as p:
     # playback
     page.click('#btnNextSet'); page.click('#btnPrevSet')
     check('prev set goes back to set 1', page.evaluate('__dw.cur') == 0)
+    page.click('#btnNextSet'); page.locator('#field').focus(); page.keyboard.press('Space'); page.wait_for_timeout(200)
+    check('Space on set 2 plays the move into set 2 (starts from set 1)', page.evaluate('__dw.playing') and 0 < page.evaluate('__dw.count') < 16)
+    page.keyboard.press('Space'); page.click('#btnPrevSet'); page.click('#btnPrevSet')
     page.fill('#bpm', '240'); page.press('#bpm', 'Enter')
     page.click('#btnPlay'); page.wait_for_timeout(1500)
     mid = page.evaluate('__dw.count')

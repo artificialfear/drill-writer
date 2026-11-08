@@ -282,7 +282,10 @@ function renderBigCount({ phase, count, beatNum, run }) {
 let raf = 0, lastT = 0;
 function play() {
   if (st.show.sets.length < 2) return;
-  if (st.count >= totalCounts(st.show) - 1e-6) st.count = 0;
+  // on set N, play the move into set N (start from set N-1); mid-move, continue
+  const starts = setStarts(st.show);
+  const at = starts.findIndex(c => Math.abs(c - st.count) < 1e-6);
+  if (at > 0) { st.count = starts[at - 1]; st.cur = at - 1; render(); }
   st.playing = true; $('playBtn').textContent = '⏸ Pause'; lastT = performance.now();
   raf = requestAnimationFrame(tick);
 }

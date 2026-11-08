@@ -75,6 +75,9 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - CSS gotcha: elements with `display:flex` need an explicit `[hidden]{display:none}` rule.
 - Mat's agreed next UI steps after Emily's hands-on session: Write/Rehearse/Students modes, undo toasts instead of confirm(), save status, new-show wizard, "?" shortcut sheet, onion skin of next set.
 
+## Playback rule
+- Sitting on set N (N>0), Play starts at set N-1 so it shows the move INTO set N (Mat's request, 2026-11-07). Mid-move it resumes. Rehearse mode is unchanged (explicit From/To).
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):

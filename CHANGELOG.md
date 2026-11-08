@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.8.2 — 2026-11-07
+- Play / Space now starts at the beginning of the selected set's move: on set 5 it plays the counts into set 5 (from set 4), matching that set's block on the timeline, then keeps going. Before, pressing play on the last set jumped back to set 1. Paused in the middle of a move, it just continues. Same in the student view.
+
 ## 0.8.1 — 2026-11-07
 - After Line, Arc, Block or Circle places the dots, the app switches back to Select automatically, so the next click picks a student instead of re-forming the group. A short message confirms it (Ctrl+Z undoes the form).
 - Form tool hints now say "Esc = cancel".
