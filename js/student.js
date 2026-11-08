@@ -5,6 +5,7 @@ import {
   normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { css, drawField, shapePath, propCorners } from './fieldDraw.js';
+import { technique } from './technique.js';
 import { createRehearsal, DEFAULT_SETTINGS, COUNTOFF_PRESETS } from './rehearse.js';
 
 const $ = id => document.getElementById(id);
@@ -70,10 +71,12 @@ function pickMe(id) {
 const me = () => st.show.performers.find(p => p.id === st.me);
 
 // ---------- per-set facts for me ----------
-function myMove(i) { // move INTO set i
+function myMove(i) { // move INTO set i: step size + technique
   if (i === 0) return null;
   const A = st.show.sets[i - 1].pos[st.me], B = st.show.sets[i].pos[st.me];
-  return stepSize(A, B, st.show.sets[i].counts);
+  const mv = stepSize(A, B, st.show.sets[i].counts);
+  mv.tech = technique(sectionByKey(me().section).family, A, B);
+  return mv;
 }
 function render() {
   const p = me(); if (!p) return;
@@ -88,7 +91,10 @@ function render() {
   else {
     chips.push(`<span class="chip">${set.counts} counts from set ${esc(sets[st.cur - 1].name)}</span>`);
     if (mv.dist < 0.01) chips.push('<span class="chip hold">HOLD</span>');
-    else chips.push(`<span class="chip${mv.big ? ' big' : ''}">${mv.label}${mv.big ? ' — big step!' : ''}</span>`);
+    else {
+      chips.push(`<span class="chip tech">${mv.tech.label}</span>`);
+      chips.push(`<span class="chip${mv.big ? ' big' : ''}">${mv.label}${mv.big ? ' — big step!' : ''}</span>`);
+    }
     if (set.bpm) chips.push(`<span class="chip">♩ = ${set.bpm}</span>`);
   }
   $('chips').innerHTML = chips.join('');
@@ -98,7 +104,7 @@ function render() {
     const n = sets[st.cur + 1], nm = myMove(st.cur + 1);
     $('nextInfo').innerHTML = nm.dist < 0.01
       ? `Next: <strong>hold ${n.counts}</strong> into set ${esc(n.name)}`
-      : `Next: <strong>${n.counts} counts</strong> to set ${esc(n.name)} · ${nm.label}${nm.big ? ' ⚠' : ''}`;
+      : `Next: <strong>${n.counts} counts</strong> to set ${esc(n.name)} · <strong>${nm.tech.label}</strong> · ${nm.label}${nm.big ? ' ⚠' : ''}`;
   } else $('nextInfo').textContent = 'Last set of the show.';
   $('prevSet').disabled = st.cur === 0; $('nextSet').disabled = st.cur === sets.length - 1;
   renderSheet(); renderNear(); updateClock(); draw();
@@ -108,7 +114,7 @@ function renderSheet() {
   $('sheetTitle').textContent = `${p.label} · ${sectionByKey(p.section).name} — ${st.show.title}`;
   $('sheetBody').innerHTML = sets.map((s, i) => {
     const q = s.pos[st.me], mv = myMove(i);
-    const step = !mv ? '' : mv.dist < 0.01 ? '<td class="hold">Hold</td>' : `<td class="${mv.big ? 'big' : ''}">${mv.label}</td>`;
+    const step = !mv ? '' : mv.dist < 0.01 ? '<td class="hold">Hold</td>' : `<td class="${mv.big ? 'big' : ''}">${mv.label}<br><span class="tech-s">${mv.tech.label}</span></td>`;
     return `<tr class="${i === st.cur ? 'cur' : ''}"><td>${esc(s.name)}</td><td>${i ? s.counts : '—'}</td><td>${esc(describeX(q.x))}</td><td>${esc(describeY(q.y, st.show.field))}</td>${step || '<td></td>'}</tr>`;
   }).join('');
 }

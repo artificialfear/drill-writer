@@ -3,6 +3,7 @@
 // so the front sideline (audience) is toward +Z.
 import * as THREE from '../vendor/three-bundle.min.js';
 import { FIELD_DEPTH, GOAL_X, END_X, refLines, sectionByKey } from './model.js';
+import { technique } from './technique.js';
 
 const HALF_D = FIELD_DEPTH / 2;
 const toZ = y => HALF_D - y;
@@ -65,6 +66,8 @@ function fieldTexture(field, dark) {
 // ---------- People ----------
 const GEO = {
   leg: new THREE.BoxGeometry(0.28, 1.4, 0.3).translate(0, -0.7, 0),
+  foot: new THREE.BoxGeometry(0.26, 0.13, 0.52).translate(0, -1.36, 0.13), // toes point the way the hips face
+  pelvis: new THREE.BoxGeometry(0.62, 0.28, 0.34),
   torso: new THREE.CylinderGeometry(0.33, 0.27, 1.05, 12),
   head: new THREE.SphereGeometry(0.26, 14, 10),
   shako: new THREE.CylinderGeometry(0.22, 0.24, 0.42, 12),
@@ -120,13 +123,18 @@ function buildPerson(p) {
   const sec = sectionByKey(p.section);
   const m = secMat(sec);
   const root = new THREE.Group(); root.userData.id = p.id;
-  const body = new THREE.Group(); root.add(body); // body bobs while walking; shadow/ring stay on the ground
+  // body (whole marcher: turns for guard/DM, bobs while stepping) → hips (lower body: turns for slides) + upper body
+  const body = new THREE.Group(); root.add(body);
   const hip = 1.45;
-  const legL = new THREE.Mesh(GEO.leg, MAT.pants); legL.position.set(-0.16, hip, 0);
-  const legR = new THREE.Mesh(GEO.leg, MAT.pants); legR.position.set(0.16, hip, 0);
+  const hips = new THREE.Group(); hips.position.y = hip; body.add(hips);
+  const legL = new THREE.Mesh(GEO.leg, MAT.pants); legL.position.set(-0.16, 0, 0);
+  const legR = new THREE.Mesh(GEO.leg, MAT.pants); legR.position.set(0.16, 0, 0);
+  legL.add(new THREE.Mesh(GEO.foot, MAT.pants)); legR.add(new THREE.Mesh(GEO.foot, MAT.pants));
+  const pelvis = new THREE.Mesh(GEO.pelvis, MAT.pants); pelvis.position.y = 0.02;
+  hips.add(legL, legR, pelvis);
   const torso = new THREE.Mesh(GEO.torso, m.body); torso.position.y = hip + 0.52;
   const head = new THREE.Mesh(GEO.head, MAT.skin); head.position.y = hip + 1.32;
-  body.add(legL, legR, torso, head);
+  body.add(torso, head);
   if (sec.family !== 'guard') {
     const shako = new THREE.Mesh(GEO.shako, sec.family === 'dm' ? m.body : MAT.shako); shako.position.y = hip + 1.62;
     const plume = new THREE.Mesh(GEO.plume, m.body); plume.position.y = hip + 1.98;
@@ -159,7 +167,9 @@ function buildPerson(p) {
   const ring = new THREE.Mesh(GEO.ring, MAT.ring); ring.position.y = 0.05; ring.visible = false; ring.renderOrder = 2;
   const label = labelSprite(p.label);
   root.add(shadow, ring, label);
-  root.userData.parts = { body, legL, legR, ring, label };
+  root.userData.parts = { body, hips, legL, legR, ring, label };
+  root.userData.family = sec.family;
+  root.userData.yaw = { hips: 0, body: 0 };
   root.traverse(o => { o.userData.pid = p.id; });
   return root;
 }
@@ -174,6 +184,14 @@ function buildProp(prop) {
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry), new THREE.LineBasicMaterial({ color: 0x222222 }));
   mesh.add(edges);
   return mesh;
+}
+
+// ease a rotation toward its target along the shortest way round
+function turnToward(cur, target) {
+  let d = target - cur;
+  while (d > Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return Math.abs(d) < 0.01 ? target : cur + d * 0.25;
 }
 
 // ---------- View ----------
@@ -260,10 +278,18 @@ export function create3D(container, { getFrame, onPick }) {
       const g = people.get(p.id); if (!g) continue;
       const q = frame.pos[p.id];
       g.position.set(q.x, 0, toZ(q.y));
-      const { body, legL, legR, ring, label } = g.userData.parts;
+      const { body, hips, legL, legR, ring, label } = g.userData.parts;
       const moving = inMotion && Math.hypot(B.pos[p.id].x - A.pos[p.id].x, B.pos[p.id].y - A.pos[p.id].y) > 0.05;
+      // technique for this move: winds slide (hips toward travel, torso to the box), battery crab step,
+      // guard/DM turn their whole body; moving backward = hips away from travel, stepping back
+      const t = moving ? technique(g.userData.family, A.pos[p.id], B.pos[p.id]) : null;
+      const yaw = g.userData.yaw;
+      yaw.hips = turnToward(yaw.hips, t ? t.hipYaw : 0);
+      yaw.body = turnToward(yaw.body, t ? t.bodyYaw : 0);
+      hips.rotation.y = yaw.hips; body.rotation.y = yaw.body;
       const swing = moving ? phase * 0.42 : 0;
-      legL.rotation.x = swing; legR.rotation.x = -swing;
+      if (t && t.legs === 'crab') { legL.rotation.set(0, 0, swing * 0.5); legR.rotation.set(0, 0, swing * 0.5); }
+      else { legL.rotation.set(swing, 0, 0); legR.rotation.set(-swing, 0, 0); }
       body.position.y = moving ? Math.abs(phase) * 0.06 : 0;
       ring.visible = sel.has(p.id);
       label.visible = labels || sel.has(p.id);
@@ -323,6 +349,7 @@ export function create3D(container, { getFrame, onPick }) {
     show() { visible = true; container.hidden = false; resize(); renderer.setAnimationLoop(loop); },
     hide() { visible = false; container.hidden = true; renderer.setAnimationLoop(null); },
     setCamera,
+    lookFrom(pos, target) { followLast = null; camera.position.set(...pos); controls.target.set(...target); controls.update(); },
     get visible() { return visible; }
   };
 }

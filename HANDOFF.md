@@ -61,6 +61,13 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 - Point of view: `st.pov` 'performer' (default, Mat's request) | 'director', saved in `drillwriter.pov`. 2D performer view = `view.flip` (180° rotation, text stays upright; `fieldDraw.drawField` supports `v.flip`). 3D follow camera sits behind the marcher (y 15, z −12) in performer view, in front (y 24, z +38) in director view.
 - Not yet: publishing, encrypted audio, offline service worker (session 3).
 
+## Marching technique (`js/technique.js`)
+- `technique(family, from, to)` → `{kind, label, hipYaw, bodyYaw, legs}`. theta = travel angle from straight forward (toward the box), + = marcher's left (Side 2). Assumes everyone faces the box (no facings yet).
+- Winds: |θ| ≤ 100° → hips yaw θ, step forward (<20° forward march, ≥70° slide, else forward slide). |θ| > 100° → hips face away from travel (θ∓180°), step backward (>160° backward march, else backward slide). Battery: <45° forward, >135° backward, else crab step (hips front, legs swing sideways). Guard/DM: whole body yaw θ. Pit/no move: hold.
+- 3D bodies: body (bodyYaw, bob) → hips group (hipYaw; legs + feet + pelvis) + upper body. Yaws ease toward target via `turnToward()`.
+- `create3D(...).lookFrom(pos, target)` exists for tests/screens.
+- Mat chose these section defaults (2026-11-07). When facings are added, "torso to the box" becomes "torso to the set's facing".
+
 ## Decisions Mat made
 - Repo under artificialfear.
 - Audio = MP3 reference recordings, packaged with the published show so students need NO setup and it works offline on iPhone + Android (decided 2026-11-07):
@@ -81,7 +88,8 @@ Hosted on GitHub Pages: `artificialfear/drill-writer` (repo to be created by Mat
 1c. ✅ v0.3 — Drop a student with per-set fixes and a change report.
 1d. ✅ v0.4 — Add a student to finished drill; remembered empty spots.
 1e. ✅ v0.5 — Rehearse: count-off + click track over a range of sets, per-set tempo.
-1f. ✅ v0.6 — Student view + Preview as student (no publishing/offline yet).
+1f. ✅ v0.6 — Student view + Preview as student (no publishing/offline yet); performer/director views.
+1g. ✅ v0.7 — Marching technique: slides / crab step / travel in 3D + technique labels.
 2. Session 2 — Audio + tempo map in the editor: load local MP3, waveform, count-1 offset, typed per-measure tempos then tap-along to fix rits/accels, fermatas as count holds, two-way scrubbing, playback speed, audio-delay setting, duration check.
 3. Session 3 — Publish for students (encrypted bundle, link + QR, service worker/offline) + performer view (pick drill ID → own dot sheet + highlighted 2D/3D animation + synced music), printable dot sheets (PDF), collision check.
 4. Later: curved paths / follow-the-leader, facings (3D bodies would turn), backward-march vs. slide in 3D, sub-sets ("3A"), Band Ninja-style roster import.

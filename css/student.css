@@ -102,6 +102,8 @@ select, input { background: var(--panel); border: 1px solid var(--line); border-
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: 14px; background: var(--panel); }
 .chip.hold { border-color: var(--select); color: var(--select); font-weight: 700; }
+.chip.tech { border-color: var(--accent); color: var(--accent); font-weight: 700; }
+.tech-s { color: var(--muted); font-size: 12px; }
 .chip.big { border-color: var(--warn); color: var(--warn); font-weight: 700; }
 .note { background: var(--panel); border-left: 3px solid var(--accent); padding: 6px 10px; border-radius: 4px; }
 .next-info { margin-top: 10px; color: var(--muted); font-size: 15px; }

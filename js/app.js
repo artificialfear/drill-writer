@@ -5,6 +5,7 @@ import {
   setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
+import { technique } from './technique.js';
 import { css, drawField as drawFieldShared, shapePath as shapePathShared, propCorners } from './fieldDraw.js';
 import { createRehearsal, COUNTOFF_PRESETS, SOUNDS, DEFAULT_SETTINGS } from './rehearse.js';
 
@@ -722,7 +723,7 @@ function renderDotInfo() {
     const ss = i ? stepSize(state.show.sets[i - 1].pos[p.id], q, st.counts) : null;
     rows += `<tr class="${i === state.cur ? 'current' : ''}"><td>${escapeHtml(st.name)}</td><td>${i ? st.counts : '—'}</td>
       <td>${escapeHtml(describeX(q.x))}</td><td>${escapeHtml(describeY(q.y, state.show.field))}</td>
-      <td class="${ss && ss.big ? 'big' : ''}">${ss ? ss.label : ''}</td></tr>`;
+      <td class="${ss && ss.big ? 'big' : ''}">${ss ? (ss.dist < 0.01 ? 'Hold' : `${ss.label}<br><span class="help">${technique(sec.family, state.show.sets[i - 1].pos[p.id], q).label}</span>`) : ''}</td></tr>`;
   });
   box.innerHTML = `<h3 style="margin:0 0 6px">${escapeHtml(p.label)} <span class="help">${sec.name}</span></h3>
     <table class="dot-table"><thead><tr><th>Set</th><th>Cts</th><th>Side to side</th><th>Front to back</th><th>Step</th></tr></thead><tbody>${rows}</tbody></table>

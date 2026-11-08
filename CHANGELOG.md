@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.0 — 2026-11-07
+- 3D marchers now show marching technique. Winds keep their upper body and horn to the box while their hips, legs and feet turn toward the next dot (slides). Moving backward, the hips face away from travel and they step back (backward march / backward slide). Battery keeps drums to the box and crab steps sideways. Guard and drum major turn their whole body toward where they're going. Holds stand still.
+- The student view names the technique for every move ("Slide right", "Forward slide left", "Backward march", "Crab step left"…) next to the step size, in "Next:", and on the dot sheet. Left/right are the marcher's, facing the box.
+- The editor's Dot tab shows the technique under each step size.
+
 ## 0.6.1 — 2026-11-07
 - Student view now opens in **Performer view** by default: the field is turned around the way a marcher sees it facing the audience (front sideline at the top, Side 1 on the right). **Director** switches to the press-box view. The phone remembers the choice.
 - In 3D, Performer view puts the camera just behind and above the student, looking toward the audience; Director view looks from the front. "Field" uses the backfield or press-box camera to match.

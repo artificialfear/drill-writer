@@ -253,6 +253,7 @@ with sync_playwright() as p:
     sp.click('.tabs button[data-tab=drill]')
     sp.click('#nextSet')
     check('set 2 shows counts and step size', '24 counts' in sp.inner_text('#chips') and 'to 5' in sp.inner_text('#chips'))
+    check('set 2 names the marching technique', any(w in sp.inner_text('#chips').lower() for w in ('slide', 'march', 'crab', 'face')))
     sp.screenshot(path=f'{SHOTS}/s3-set2.png')
     sp.click('.tabs button[data-tab=near]')
     check('nearby lists neighbors', sp.locator('#nearList li').count() == 4)
