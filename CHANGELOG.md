@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.20.0 — 2026-11-08
+- **Uniform pass: marchers look much more like the real band.**
+  - **Shaped jacket:** a real torso shape with chest, waist, and a hem that flares over the hips. The uniform pattern is now a texture, so the teal yoke, silver band, and silver piping have crisp, smooth edges. It has a satin finish.
+  - **Draped teal yoke** over each shoulder with silver piping along the edge (replacing the round pads), plus a teal stand-up collar with a silver rim.
+  - **Shako worn low,** with the visor at the eyebrows, the chin strap under the chin, and hair showing at the sides and back. Silver band, top rim, and plate.
+  - **Full feather plume:** a fluffy core with dozens of curving teal feathers and a little black at the base. Sousaphones still go without.
+  - **Faces:** eyes, eyebrows, ears, nose, and mouth.
+  - **Fuller black sleeves** that end at the wrist, so hands show. **Loose straight-leg pants** and polished black shoes.
+  - **Real metal:** brass, silver, and chrome now reflect the sky and field.
+- Performance: about 8,000 triangles per marcher (about 430k for a 52-person band). Small details like eyes and drum hoops use fewer facets, and the jacket mesh is shared by everyone. `v3.stats()` reports draw calls and triangles for checking phone load.
+
 ## 0.19.0 — 2026-11-08
 - **Drum major on a podium.** The drum major stands on a 3-ft black podium with a silver edge, a teal band, and steps up the back. They face the center of the band wherever they stand (before, they faced the audience). The podium goes wherever the drum major's dot is.
 - **Conducts in time with the drill.**

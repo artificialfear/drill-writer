@@ -81,11 +81,12 @@ const UP = V(0, 1, 0);
 // Band uniform: black jacket with a teal yoke and shoulder pads, a silver diagonal band, black pants,
 // teal shako with silver trim and a teal feather plume. Everyone wears the same uniform.
 const COL = {
-  teal: '#1fa3a6', tealDark: '#147b7e', tealLight: '#4cc4c4', black: '#121315', silver: '#c9ced3',
+  teal: '#1fa3a6', tealDark: '#147b7e', tealLight: '#4cc4c4', black: '#121315', silver: '#c9ced3', silverDark: '#8e959b',
   pants: '#141518', shoe: '#0a0a0b', visor: '#0b0b0c', brass: '#d6ae48', bronze: '#c9a24a',
   flute: '#d3d8dc', white: '#f2f2f0', head: '#e9e9e4', wood: '#7a5233', stick: '#e4cfa4', chrome: '#c3c9ce',
   shell: '#16171a', felt: '#f3f3f0'
 };
+const METAL = new Set([COL.brass, COL.bronze, COL.chrome, COL.flute]); // these get the shiny metal material
 const SKIN = ['#f1c9a8', '#e2ae86', '#c78d60', '#9b6943', '#6c4630'];
 const HAIR = ['#2b1d14', '#4a3020', '#161616', '#6b4a2b', '#b8894f'];
 
@@ -107,6 +108,7 @@ function paint(g, color) {
     for (let k = 0; k < 3 && t + k < n; k++) { a[(t + k) * 3] = c.r; a[(t + k) * 3 + 1] = c.g; a[(t + k) * 3 + 2] = c.b; }
   }
   g.setAttribute('color', new THREE.BufferAttribute(a, 3));
+  if (typeof color === 'string' && METAL.has(color)) g.userData.metal = true;
   return g;
 }
 // put a geometry built along +Y (centred on the origin) between points a and b
@@ -118,7 +120,8 @@ function between(g, a, b) {
 }
 const tube = (a, b, r, col, seg = 8) => paint(between(new THREE.CylinderGeometry(r, r, a.distanceTo(b), seg), a, b), col);
 const limb = (a, b, r, col) => paint(between(new THREE.CapsuleGeometry(r, Math.max(0.01, a.distanceTo(b)), 3, 8), a, b), col);
-const ball = (p, r, col, sx = 1, sy = 1, sz = 1) => paint(new THREE.SphereGeometry(r, 12, 9).scale(sx, sy, sz).translate(p.x, p.y, p.z), col);
+// small balls (eyes, ears, stick tips…) use fewer facets — nobody can see the difference at that size
+const ball = (p, r, col, sx = 1, sy = 1, sz = 1) => { const n = r < 0.05 ? [7, 5] : r < 0.1 ? [10, 7] : [14, 10]; return paint(new THREE.SphereGeometry(r, n[0], n[1]).scale(sx, sy, sz).translate(p.x, p.y, p.z), col); };
 const box = (p, w, h, d, col) => paint(new THREE.BoxGeometry(w, h, d).translate(p.x, p.y, p.z), col);
 // flared bell: narrow at `base`, opening `len` along `dir`
 function bell(base, dir, len, rT, rM, col) {
@@ -137,7 +140,7 @@ function drum(c, r, h, axis = 'y', head = COL.head) {
     paint(at(turn(new THREE.CylinderGeometry(r, r, h * 0.9, 24, 1, true))), COL.shell)
   ];
   for (const s of [-1, 1]) {
-    const hoop = new THREE.TorusGeometry(r, 0.024, 5, 26).rotateX(Math.PI / 2).translate(0, s * h * 0.47, 0);
+    const hoop = new THREE.TorusGeometry(r, 0.024, 4, 20).rotateX(Math.PI / 2).translate(0, s * h * 0.47, 0);
     out.push(paint(at(turn(hoop)), COL.chrome));
   }
   // tension rods down the shell
@@ -290,23 +293,97 @@ function sequins(x, y, z) {
   const h = Math.abs(Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453) % 1;
   return SEQUIN[Math.floor(h * SEQUIN.length)];
 }
-// Jacket pattern (front): teal yoke across the shoulders and down the marcher's left side,
-// split from the black by a silver band running from the right shoulder down to the left hip. Back: teal yoke only.
+// ---------- Band jacket (shared by every wind, battery, pit player and the drum major) ----------
+// A lathe-turned torso with a real shape — chest, waist, and a hem that flares over the hips —
+// wearing the uniform pattern as a texture, so the edges of the yoke and the silver band stay crisp.
+// Front: teal yoke across the shoulders and down the marcher's left side, split from the black by a silver
+// band running from the right shoulder down to the left hip (with thin silver piping). Back: teal yoke.
 function jacketColor(x, y, z) {
-  if (z < -0.03) return y > 2.3 ? COL.teal : COL.black;
-  // band from (−0.3, 2.3) [marcher's right shoulder] to (0.3, 1.66) [left hip]
-  const ax = -0.3, ay = 2.3, bx = 0.3, by = 1.66;
+  if (z < -0.03) return y > 2.28 ? COL.teal : Math.abs(y - 2.28) < 0.012 ? COL.silver : COL.black;
+  const ax = -0.3, ay = 2.3, bx = 0.3, by = 1.62; // band: marcher's right shoulder → left hip
   const nx = -(by - ay), ny = bx - ax, len = Math.hypot(nx, ny);
   const d = ((x - ax) * nx + (y - ay) * ny) / len; // > 0 above the line
-  if (Math.abs(d) < 0.035) return COL.silver;
+  if (Math.abs(d) < 0.034) return Math.abs(d) > 0.026 ? COL.silverDark : COL.silver;
   return d > 0 ? COL.teal : COL.black;
+}
+const JACKET_PROFILE = [ // [radius, height] from the hem up to the collar
+  [0.2, 1.3], [0.278, 1.31], [0.272, 1.42], [0.255, 1.56], [0.24, 1.68], [0.245, 1.8], [0.272, 1.98],
+  [0.296, 2.15], [0.302, 2.28], [0.292, 2.38], [0.25, 2.45], [0.17, 2.5], [0.1, 2.53]
+];
+const JACKET_DEPTH = 0.62; // the torso is flattened front to back
+function profileAt(v) { // v in 0..1 along the profile (matches the lathe's own spacing once densified)
+  const n = JACKET_DENSE.length - 1, f = v * n, i = Math.min(n - 1, Math.floor(f)), t = f - i;
+  return [JACKET_DENSE[i][0] + (JACKET_DENSE[i + 1][0] - JACKET_DENSE[i][0]) * t, JACKET_DENSE[i][1] + (JACKET_DENSE[i + 1][1] - JACKET_DENSE[i][1]) * t];
+}
+const JACKET_DENSE = (() => { // smooth the profile (Catmull-Rom) into evenly many points
+  const pts = JACKET_PROFILE.map(([r, y]) => new THREE.Vector2(r, y));
+  const c = new THREE.SplineCurve(pts);
+  return c.getPoints(30).map(p => [p.x, p.y]);
+})();
+let jacketGeo = null, jacketMat = null;
+function jacket() {
+  if (jacketGeo) return { geo: jacketGeo, mat: jacketMat };
+  const pts = JACKET_DENSE.map(([r, y]) => new THREE.Vector2(r, y));
+  jacketGeo = new THREE.LatheGeometry(pts, 40).scale(1, 1, JACKET_DEPTH); // the pattern is a texture, so the mesh can be light
+  jacketGeo.computeVertexNormals();
+  // paint the texture: every pixel is a point on the jacket (u = around, v = up the profile)
+  const W = 1024, H = 512, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(W, H), rgb = {};
+  for (const hex of [COL.teal, COL.black, COL.silver, COL.silverDark]) {
+    const n = parseInt(hex.slice(1), 16); rgb[hex] = [n >> 16, (n >> 8) & 255, n & 255];
+  }
+  for (let py = 0; py < H; py++) {
+    const [r, y] = profileAt(1 - (py + 0.5) / H);
+    for (let px = 0; px < W; px++) {
+      const phi = (px + 0.5) / W * Math.PI * 2;
+      const c = rgb[jacketColor(r * Math.sin(phi), y, r * Math.cos(phi) * JACKET_DEPTH)];
+      const o = (py * W + px) * 4; img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  jacketMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.42, metalness: 0.05, envMapIntensity: 0.7 }); // satin
+  return { geo: jacketGeo, mat: jacketMat };
+}
+
+// A plume: dozens of thin, tapered, curving feathers rising from the front of the crown and leaning back.
+function feather(base, tip, bend, r, col) {
+  const curve = new THREE.QuadraticBezierCurve3(base, base.clone().lerp(tip, 0.5).add(bend), tip);
+  const segs = 5, rad = 3, g = new THREE.TubeGeometry(curve, segs, r, rad, false), p = g.attributes.position;
+  for (let i = 0; i <= segs; i++) {
+    const c = curve.getPointAt(i / segs), k = 1 - 0.8 * (i / segs);
+    for (let j = 0; j <= rad; j++) {
+      const v = i * (rad + 1) + j;
+      p.setXYZ(v, c.x + (p.getX(v) - c.x) * k, c.y + (p.getY(v) - c.y) * k, c.z + (p.getZ(v) - c.z) * k);
+    }
+  }
+  g.computeVertexNormals();
+  return paint(g, col);
+}
+function plume(top, scale, seed) {
+  let s = seed || 1; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const out = [], base = V(0, top - 0.01, 0.1);
+  out.push(paint(new THREE.CylinderGeometry(0.035, 0.05, 0.08, 8).translate(base.x, base.y + 0.02, base.z), COL.black)); // holder
+  const shades = [COL.teal, COL.tealLight, COL.tealDark, COL.teal, '#2bb8b6'];
+  // a soft, full core so it reads as one fluffy plume from a distance…
+  out.push(ball(base.clone().add(V(0, 0.27 * scale, -0.06 * scale)), 0.12 * scale, COL.tealDark, 1, 2.1, 0.95));
+  out.push(ball(base.clone().add(V(0, 0.4 * scale, -0.1 * scale)), 0.11 * scale, COL.teal, 1.05, 1.7, 1));
+  // …and lots of feathers fanning out of it, curling outward and back
+  for (let k = 0; k < 46; k++) {
+    const a = rnd() * Math.PI * 2, spread = 0.45 + rnd() * 0.55, h = (0.3 + rnd() * 0.36) * scale;
+    const tip = base.clone().add(V(Math.sin(a) * 0.22 * spread * scale, h, Math.cos(a) * 0.17 * spread * scale - 0.13 * scale));
+    const bend = V(Math.sin(a) * 0.12 * spread, 0.03, Math.cos(a) * 0.08 - 0.06);
+    const col = k < 6 ? COL.black : shades[Math.floor(rnd() * shades.length)]; // a little black at the base, like the real ones
+    out.push(feather(base.clone().add(V(0, 0.04 + rnd() * 0.12 * scale, -0.02)), tip, bend, 0.042 * scale, col));
+  }
+  return out;
 }
 
 const upperCache = new Map();
 function upperBody(sec, tone, opts = {}) {
   const key = `${sec.key}|${tone}|${opts.bass || ''}`;
   if (upperCache.has(key)) return upperCache.get(key);
-  const skin = SKIN[tone], guard = sec.family === 'guard', dm = sec.family === 'dm';
+  const skin = SKIN[tone], hair = HAIR[tone], guard = sec.family === 'guard', dm = sec.family === 'dm';
   const g = [];
   if (guard) {
     // guard: fitted black sleeveless mock-neck top, wide sparkly teal sash at the waist, bare arms
@@ -316,64 +393,79 @@ function upperBody(sec, tone, opts = {}) {
     g.push(paint(new THREE.CylinderGeometry(0.245, 0.28, 0.22, 56, 7).scale(1, 1, 0.68).translate(0, 1.62, 0), sequins));
     for (const sd of ['L', 'R']) g.push(ball(SH[sd], 0.072, skin));
   } else {
-    // jacket: tapered, flattened torso painted with the uniform pattern; shoulder pads; stand-up collar; belt
-    g.push(paint(new THREE.CylinderGeometry(0.3, 0.25, 0.92, 72, 44).scale(1, 1, 0.62).translate(0, 2.0, 0), jacketColor));
-    for (const s of [-1, 1]) { // squared-off shoulder pads that stick out past the shoulders, silver piping underneath
-      g.push(ball(V(s * 0.27, 2.45, 0), 0.2, COL.teal, 1.0, 0.42, 0.85));
-      g.push(paint(new THREE.TorusGeometry(0.19, 0.012, 4, 20).rotateX(Math.PI / 2).scale(1, 1, 0.85).translate(s * 0.27, 2.43, 0), COL.silver));
+    // the jacket itself is a shared, textured mesh (see jacket()); here: the draped teal yoke over each shoulder
+    // with silver piping along its edge, and the teal stand-up collar
+    for (const s of [-1, 1]) {
+      const cap = new THREE.SphereGeometry(0.2, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.56).scale(1.08, 0.8, 0.9).rotateZ(-s * 0.32).translate(s * 0.27, 2.34, 0);
+      g.push(paint(cap, COL.teal));
+      const rimY = 0.2 * Math.cos(Math.PI * 0.56) * 0.8, rimR = 0.2 * Math.sin(Math.PI * 0.56);
+      g.push(paint(new THREE.TorusGeometry(rimR, 0.011, 4, 26).rotateX(Math.PI / 2).scale(1.08, 1, 0.9).translate(0, rimY, 0).rotateZ(-s * 0.32).translate(s * 0.27, 2.34, 0), COL.silver));
     }
-    g.push(paint(new THREE.CylinderGeometry(0.1, 0.12, 0.12, 14).translate(0, 2.52, 0), COL.teal));
-    g.push(paint(new THREE.CylinderGeometry(0.102, 0.102, 0.018, 14).translate(0, 2.585, 0), COL.silver));
-    g.push(paint(new THREE.CylinderGeometry(0.262, 0.262, 0.07, 16).scale(1, 1, 0.64).translate(0, 1.6, 0), COL.black));
+    g.push(paint(new THREE.CylinderGeometry(0.098, 0.112, 0.11, 16).translate(0, 2.55, 0), COL.teal));
+    g.push(paint(new THREE.CylinderGeometry(0.1, 0.1, 0.016, 16).translate(0, 2.605, 0), COL.silver));
   }
-  // neck + head
-  g.push(paint(new THREE.CylinderGeometry(0.075, 0.08, 0.16, 10).translate(0, 2.58, 0), skin));
-  const hd = []; // head, hair/shako, plume: separate so it can turn (bass drums watch the drum major)
-  hd.push(ball(V(0, 2.79, 0.02), 0.175, skin, 1, 1.12, 1.05));
-  hd.push(ball(V(0, 2.73, 0.2), 0.03, skin, 1, 1.2, 0.9)); // nose
+  // neck
+  g.push(paint(new THREE.CylinderGeometry(0.072, 0.078, 0.16, 10).translate(0, 2.6, 0), skin));
+  // head (separate so it can turn — bass drums watch the drum major): face, ears, hair
+  const hd = [];
+  const HEAD = V(0, 2.79, 0.02);
+  hd.push(ball(HEAD, 0.172, skin, 1, 1.13, 1.06));
+  hd.push(ball(V(0, 2.775, 0.2), 0.026, skin, 0.9, 1.3, 1)); // nose
+  for (const s of [-1, 1]) {
+    hd.push(ball(V(s * 0.172, 2.79, 0.0), 0.042, skin, 0.45, 1, 0.75)); // ears
+    hd.push(ball(V(s * 0.062, 2.818, 0.188), 0.02, '#f4f1ec', 1, 0.75, 0.5)); // eyes
+    hd.push(ball(V(s * 0.062, 2.818, 0.196), 0.011, '#2a1c14'));
+    hd.push(box(V(s * 0.064, 2.852, 0.18), 0.06, 0.012, 0.02, hair)); // eyebrows
+  }
+  hd.push(box(V(0, 2.715, 0.188), 0.065, 0.011, 0.02, '#8a4a44')); // mouth
   if (guard) { // long hair worn down: over the crown, down the back, a strand falling in front of each shoulder
-    const hair = HAIR[tone];
     hd.push(paint(new THREE.SphereGeometry(0.185, 14, 9, 0, Math.PI * 2, 0, Math.PI * 0.58).scale(1.02, 1.12, 1.06).rotateX(-0.62).translate(0, 2.8, -0.01), hair));
     hd.push(ball(V(0, 2.58, -0.11), 0.17, hair, 1.08, 2.0, 0.55));
     for (const sd of [-1, 1]) hd.push(ball(V(sd * 0.17, 2.58, -0.03), 0.065, hair, 0.7, 2.6, 0.8));
-  } else { // teal shako (a little wider at the top), silver band and chin strap, black visor, big teal feather plume
-    const tall = dm ? 0.42 : 0.36, top = 2.92 + tall;
-    hd.push(paint(new THREE.CylinderGeometry(0.205, 0.175, tall, 18).translate(0, 2.92 + tall / 2, -0.01), COL.teal));
-    hd.push(paint(new THREE.CylinderGeometry(0.207, 0.207, 0.02, 18).translate(0, top - 0.01, -0.01), COL.silver));
-    hd.push(paint(new THREE.CylinderGeometry(0.18, 0.18, 0.05, 18).translate(0, 2.96, -0.01), COL.silver));
-    hd.push(paint(new THREE.CylinderGeometry(0.2, 0.2, 0.016, 18, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.95).rotateX(0.2).translate(0, 2.93, 0.06), COL.visor));
-    hd.push(paint(new THREE.TorusGeometry(0.17, 0.008, 4, 16, Math.PI).rotateZ(Math.PI).translate(0, 2.82, 0.03), COL.silver));
-    // plume: a clump of feathers rising from the front of the crown and leaning back
-    const s = dm ? 1.25 : 1;
-    const feathers = [[0, 0.06, 0.1, 0.07, COL.black], [0, 0.16, 0.06, 0.1, COL.tealDark], [0.05, 0.28, 0.0, 0.11, COL.teal], [-0.05, 0.3, 0.01, 0.11, COL.teal],
-      [0, 0.42, -0.06, 0.12, COL.tealLight], [0.04, 0.54, -0.12, 0.1, COL.teal], [-0.03, 0.62, -0.17, 0.08, COL.tealLight]];
-    // sousaphone players wear the shako without a plume (it would hit the bell), like they do for real
-    if (sec.key !== 'tuba') for (const [x, y, z, r, col] of feathers) hd.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
+  } else {
+    // hair showing under the shako at the sides and back
+    hd.push(paint(new THREE.SphereGeometry(0.178, 18, 6, Math.PI / 2 + Math.PI / 3, Math.PI * 2 - (2 * Math.PI) / 3, Math.PI * 0.3, Math.PI * 0.24)
+      .scale(1.02, 1.13, 1.07).translate(HEAD.x, HEAD.y, HEAD.z), hair));
+    // teal shako worn low — the visor sits at the eyebrows — with a silver band and top rim, black visor,
+    // silver chin strap under the chin, a silver plate, and a big bushy teal plume (none for sousaphones)
+    const tall = dm ? 0.44 : 0.38, bot = 2.86, top = bot + tall;
+    hd.push(paint(new THREE.CylinderGeometry(0.205, 0.19, tall, 22).translate(0, bot + tall / 2, 0.0), COL.teal));
+    hd.push(paint(new THREE.CylinderGeometry(0.207, 0.207, 0.02, 22).translate(0, top - 0.01, 0), COL.silver));
+    hd.push(paint(new THREE.CylinderGeometry(0.193, 0.193, 0.045, 22).translate(0, bot + 0.035, 0), COL.silver));
+    hd.push(paint(new THREE.CylinderGeometry(0.205, 0.205, 0.016, 22, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 0.95).rotateX(0.28).translate(0, bot + 0.005, 0.07), COL.visor));
+    hd.push(paint(new THREE.TorusGeometry(0.175, 0.007, 4, 18, Math.PI).rotateZ(Math.PI).rotateX(-0.5).translate(0, 2.84, 0.04), COL.silver)); // chin strap
+    hd.push(ball(V(0, bot + tall * 0.5, 0.2), 0.045, COL.silver, 1, 1.2, 0.35)); // plate
+    if (sec.key !== 'tuba') hd.push(...plume(top, dm ? 1.3 : 1, 7 + tone));
   }
-  // arms (black sleeves) from shoulders to hands — not for the drum major, whose arms conduct (see dmArms)
+  // arms (fuller black sleeves) from shoulders to hands — not for the drum major, whose arms conduct (see dmArms)
   const ins = instrument(sec.key, opts);
   if (!dm) for (const s of ['L', 'R']) {
-    const sh = SH[s], hd = ins.hands[s], sign = s === 'L' ? -1 : 1;
-    const el = ins.elbows ? ins.elbows[s] : sh.clone().add(hd).multiplyScalar(0.5).add(V(sign * 0.13, -0.14, -0.04));
-    g.push(limb(sh, el, guard ? 0.064 : 0.078, guard ? skin : COL.black));
-    g.push(limb(el, hd, guard ? 0.055 : 0.066, guard ? skin : COL.black));
-    g.push(ball(hd, 0.064, skin, 1, 0.9, 1.15));
+    const sh = SH[s], hand = ins.hands[s], sign = s === 'L' ? -1 : 1;
+    const el = ins.elbows ? ins.elbows[s] : sh.clone().add(hand).multiplyScalar(0.5).add(V(sign * 0.13, -0.14, -0.04));
+    g.push(limb(sh, el, guard ? 0.064 : 0.09, guard ? skin : COL.black));
+    // stop the sleeve just short of the hand so the hand shows
+    const cuff = hand.clone().addScaledVector(hand.clone().sub(el).normalize(), guard ? 0 : -0.07);
+    g.push(limb(el, cuff, guard ? 0.055 : 0.076, guard ? skin : COL.black));
+    g.push(ball(hand, 0.064, skin, 1, 0.9, 1.15));
   }
   g.push(...ins.geos);
-  const merged = THREE.mergeGeometries(g), headGeo = THREE.mergeGeometries(hd).translate(0, -NECK_Y, 0);
+  // shiny parts (brass, silver, chrome) get a reflective metal material; the rest is cloth/skin/plastic
+  const metal = g.filter(x => x.userData.metal), plain = g.filter(x => !x.userData.metal);
+  const merged = THREE.mergeGeometries(plain), headGeo = THREE.mergeGeometries(hd).translate(0, -NECK_Y, 0);
+  const metalGeo = metal.length ? THREE.mergeGeometries(metal) : null;
   [...g, ...hd].forEach(x => x.dispose());
-  merged.computeBoundingSphere(); headGeo.computeBoundingSphere();
-  const out = { body: merged, head: headGeo };
+  merged.computeBoundingSphere(); headGeo.computeBoundingSphere(); if (metalGeo) metalGeo.computeBoundingSphere();
+  const out = { body: merged, head: headGeo, metal: metalGeo };
   upperCache.set(key, out);
   return out;
 }
 
 const GEO = {
   pelvis: new THREE.CylinderGeometry(0.262, 0.25, 0.3, 14).scale(1, 1, 0.64).translate(0, 0.02, 0),
-  thigh: new THREE.CapsuleGeometry(0.118, THIGH - 0.14, 3, 10).translate(0, -THIGH / 2, 0),
-  shin: new THREE.CapsuleGeometry(0.092, SHIN - 0.1, 3, 10).translate(0, -SHIN / 2, 0),
+  thigh: new THREE.CapsuleGeometry(0.134, THIGH - 0.14, 3, 12).translate(0, -THIGH / 2, 0), // loose, straight-leg uniform pants
+  shin: new THREE.CylinderGeometry(0.124, 0.13, SHIN + 0.04, 12).translate(0, -SHIN / 2 + 0.02, 0),
   shinFlare: new THREE.CylinderGeometry(0.085, 0.135, SHIN + 0.02, 14).translate(0, -SHIN / 2 - 0.01, 0), // guard: flared pants
-  shoe: (() => { const g = new THREE.CapsuleGeometry(0.075, 0.24, 3, 8).rotateX(Math.PI / 2).scale(1, 0.75, 1).translate(0, -0.03, 0.07); return g; })(),
+  shoe: (() => { const g = new THREE.CapsuleGeometry(0.082, 0.25, 3, 8).rotateX(Math.PI / 2).scale(1, 0.72, 1).translate(0, -0.03, 0.07); return g; })(),
   shadow: new THREE.CircleGeometry(0.8, 24).rotateX(-Math.PI / 2),
   ring: new THREE.RingGeometry(0.72, 0.9, 28).rotateX(-Math.PI / 2)
 };
@@ -385,9 +477,10 @@ function blobTexture() {
   return new THREE.CanvasTexture(c);
 }
 const MAT = {
-  upper: new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }),
-  pants: new THREE.MeshLambertMaterial({ color: COL.pants }),
-  shoe: new THREE.MeshPhongMaterial({ color: COL.shoe, shininess: 60, specular: 0x444444 }),
+  upper: new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.62, metalness: 0, envMapIntensity: 0.6 }),
+  metal: new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, roughness: 0.26, metalness: 0.9, envMapIntensity: 1.2 }),
+  pants: new THREE.MeshStandardMaterial({ color: COL.pants, roughness: 0.55, envMapIntensity: 0.6 }),
+  shoe: new THREE.MeshStandardMaterial({ color: COL.shoe, roughness: 0.18, metalness: 0.1 }), // polished
   shadow: new THREE.MeshBasicMaterial({ map: blobTexture(), transparent: true, depthWrite: false, toneMapped: false }),
   ring: new THREE.MeshBasicMaterial({ color: 0x8ab4f8, side: THREE.DoubleSide, depthWrite: false, toneMapped: false })
 };
@@ -431,6 +524,8 @@ function buildPerson(p) {
   const opts = sec.key === 'bass' ? { bass: Math.min(5, Math.max(1, parseInt(String(p.label).replace(/\D+/g, ''), 10) || 3)) } : {};
   const up = upperBody(sec, hash(p.id) % SKIN.length, opts);
   body.add(new THREE.Mesh(up.body, MAT.upper));
+  if (up.metal) body.add(new THREE.Mesh(up.metal, MAT.metal));
+  if (sec.family !== 'guard') { const j = jacket(); body.add(new THREE.Mesh(j.geo, j.mat)); }
   const head = new THREE.Group(); head.position.y = NECK_Y; body.add(head);
   head.add(new THREE.Mesh(up.head, MAT.upper));
   const hips = new THREE.Group(); hips.position.y = HIP; body.add(hips);
@@ -477,8 +572,8 @@ const PODIUM = (() => {
   }
   return THREE.mergeGeometries(g);
 })();
-const ARM = { up: new THREE.CylinderGeometry(0.078, 0.07, 1, 10).translate(0, 0.5, 0), fore: new THREE.CylinderGeometry(0.066, 0.058, 1, 10).translate(0, 0.5, 0),
-  joint: new THREE.SphereGeometry(0.075, 10, 8), hand: new THREE.SphereGeometry(0.066, 10, 8).scale(1, 0.9, 1.15) };
+const ARM = { up: new THREE.CylinderGeometry(0.09, 0.08, 1, 10).translate(0, 0.5, 0), fore: new THREE.CylinderGeometry(0.076, 0.064, 1, 10).translate(0, 0.5, 0),
+  joint: new THREE.SphereGeometry(0.086, 10, 8), hand: new THREE.SphereGeometry(0.066, 10, 8).scale(1, 0.9, 1.15) };
 const SLEEVE = new THREE.MeshLambertMaterial({ color: COL.black });
 const skinMats = new Map();
 const skinMat = tone => { if (!skinMats.has(tone)) skinMats.set(tone, new THREE.MeshLambertMaterial({ color: SKIN[tone] })); return skinMats.get(tone); };
@@ -624,6 +719,15 @@ export function create3D(container, { getFrame, onPick }) {
   controls.minDistance = 6; controls.maxDistance = 400;
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x3a5a3a, 1.6));
+  { // reflections: sky above, bright horizon, grass below
+    const c = document.createElement('canvas'); c.width = 64; c.height = 32;
+    const x = c.getContext('2d'), gr = x.createLinearGradient(0, 0, 0, 32);
+    gr.addColorStop(0, '#7fa9d6'); gr.addColorStop(0.46, '#eef2f4'); gr.addColorStop(0.54, '#9bb38f'); gr.addColorStop(1, '#2f5a36');
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 32);
+    const t = new THREE.CanvasTexture(c); t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace;
+    const pm = new THREE.PMREMGenerator(renderer);
+    scene.environment = pm.fromEquirectangular(t).texture; t.dispose(); pm.dispose();
+  }
   const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(-60, 120, 80); scene.add(sun);
 
   // ground apron + field
@@ -852,6 +956,7 @@ export function create3D(container, { getFrame, onPick }) {
     hide() { visible = false; container.hidden = true; renderer.setAnimationLoop(null); },
     setCamera,
     lookFrom(pos, target) { followLast = null; camera.position.set(...pos); controls.target.set(...target); controls.update(); },
-    get visible() { return visible; }
+    get visible() { return visible; },
+    stats() { const r = renderer.info.render; return { calls: r.calls, triangles: r.triangles }; } // for checking phone load
   };
 }
