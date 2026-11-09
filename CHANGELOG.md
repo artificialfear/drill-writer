@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.18.0 — 2026-11-08
+- **Eyes view (first person) on student phones.** A third button next to 2D / 3D shows the field from the student's own eyes at their spot, looking where they'd be looking.
+  - Winds look toward the box, even while sliding.
+  - Guard and drum major look where their body faces.
+  - Bass drums look at the drum major.
+  - The view moves with the drill as it plays, practices, or scrubs.
+  - Drag to glance around; the view drifts back to straight ahead about a second after letting go.
+  - The student's own body is hidden so their arms and instrument don't block the field.
+  - Uses a wider, eye-like field of view.
+  - The zoom and Performer/Director buttons are hidden here since they don't apply.
+- Fix: in a sideways (landscape) phone preview, the blue "Preview" banner covered the header buttons. It's now a small pill over the top-left corner of the field.
+
 ## 0.17.1 — 2026-11-08
 - Sousaphone players wear the shako without a plume, as they do for real, so nothing pokes into the bell. The bell also sits a little higher so it clears the top of the shako.
 

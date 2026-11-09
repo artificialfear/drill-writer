@@ -229,7 +229,7 @@ function arrow(a, b, color, width, dash) {
   ctx.restore();
 }
 function draw() {
-  if (!st.show || !st.me || !W || st.mode === '3d') return;
+  if (!st.show || !st.me || !W || st.mode !== '2d') return;
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   const frame = positionsAt(st.show, st.count);
   fitView(frame.pos[st.me]);
@@ -466,21 +466,24 @@ function goPractice() {
 // ---------- 3D ----------
 async function setMode(mode) {
   if (mode === st.mode) return;
-  if (mode === '3d' && !st.v3) {
+  if (mode !== '2d' && !st.v3) {
     try {
       const m = await import('./view3d.js');
       st.v3 = m.create3D($('view3d'), {
-        getFrame: () => ({ show: st.show, frame: positionsAt(st.show, st.count), count: st.count, sel: new Set([st.me]), selProp: null, labels: false, follow: st.zoom === 'me' ? st.me : null, followFrom: st.pov,
+        getFrame: () => ({ show: st.show, frame: positionsAt(st.show, st.count), count: st.count, sel: new Set([st.me]), selProp: null, labels: false, follow: st.zoom === 'me' ? st.me : null, followFrom: st.pov, firstPerson: st.mode === 'eyes' ? st.me : null,
           dark: document.documentElement.dataset.theme ? document.documentElement.dataset.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches }),
         onPick: () => {}
       });
     } catch (e) { toast("3D isn't available on this device."); return; }
   }
+  const was = st.mode;
   st.mode = mode;
-  $('v2d').classList.toggle('on', mode === '2d'); $('v3d').classList.toggle('on', mode === '3d');
-  canvas.style.visibility = mode === '3d' ? 'hidden' : '';
-
-  if (mode === '3d') st.v3.show(); else { st.v3 && st.v3.hide(); draw(); }
+  $('v2d').classList.toggle('on', mode === '2d'); $('v3d').classList.toggle('on', mode === '3d'); $('vEyes').classList.toggle('on', mode === 'eyes');
+  $('stage').classList.toggle('eyes', mode === 'eyes');
+  canvas.style.visibility = mode !== '2d' ? 'hidden' : '';
+  if (mode !== '2d') st.v3.show(); else { st.v3 && st.v3.hide(); draw(); }
+  if (mode === '3d' && was === 'eyes') st.v3.setCamera(st.zoom === 'me' ? null : (st.pov === 'performer' ? 'backfield' : 'press'));
+  if (mode === 'eyes') toast('Eyes view: what you see from your spot. Drag to look around.');
 }
 
 // ---------- zoom ----------
@@ -538,7 +541,7 @@ function wire() {
   $('povPerf').onclick = () => setPov('performer');
   $('povDir').onclick = () => setPov('director');
   setPov(st.pov, true);
-  $('v2d').onclick = () => setMode('2d'); $('v3d').onclick = () => setMode('3d');
+  $('v2d').onclick = () => setMode('2d'); $('v3d').onclick = () => setMode('3d'); $('vEyes').onclick = () => setMode('eyes');
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
     document.querySelectorAll('.tabs button').forEach(x => x.classList.toggle('on', x === b));
     document.querySelectorAll('.panel').forEach(pn => pn.classList.toggle('on', pn.id === `tab-${b.dataset.tab}`));

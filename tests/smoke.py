@@ -390,6 +390,12 @@ with sync_playwright() as p:
     sp.click('#v3d'); sp.wait_for_timeout(2500)
     check('student 3D view opens', sp.is_visible('#view3d canvas'))
     sp.screenshot(path=f'{SHOTS}/s7-3d.png')
+    sp.click('#vEyes'); sp.wait_for_timeout(1500)
+    check('Eyes (first person) view opens and hides zoom/POV buttons', sp.evaluate("document.querySelector('#vEyes').classList.contains('on')") and not sp.is_visible('#zoomMe') and not sp.is_visible('#povPerf'))
+    sp.evaluate("__sv.count = 12"); sp.wait_for_timeout(800)
+    sp.screenshot(path=f'{SHOTS}/s7-eyes.png')
+    sp.click('#v3d'); sp.wait_for_timeout(600)
+    check('back to 3D from Eyes brings the buttons back', sp.is_visible('#zoomMe'))
     # preview mode from the editor
     pv = phone.new_page(); pv.goto(URL.replace('index.html', 'student.html') + '?preview=1&set=1&id=' + page.evaluate("__dw.show.performers.find(p=>p.label==='G3').id"))
     pv.wait_for_selector('#mainScreen:not([hidden])')

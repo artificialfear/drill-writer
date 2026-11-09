@@ -545,6 +545,10 @@ export function create3D(container, { getFrame, onPick }) {
   renderer.domElement.style.touchAction = 'none';
 
   let followLast = null, followSide = null;
+  // first-person ("Eyes") view: camera in one performer's head, looking where they look.
+  // Drag to glance around; the view drifts back to straight ahead a moment after letting go.
+  let fpId = null;
+  const look = { yaw: 0, pitch: 0, drag: null, released: 0 };
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 2000);
   const controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -609,7 +613,7 @@ export function create3D(container, { getFrame, onPick }) {
 
   function update() {
     const f = getFrame(); if (!f) return;
-    const { show, frame, count, sel, selProp, labels, dark, follow, followFrom } = f;
+    const { show, frame, count, sel, selProp, labels, dark, follow, followFrom, firstPerson } = f;
     syncField(show, dark); syncPeople(show); syncProps(show);
     const A = show.sets[frame.i], B = show.sets[Math.min(frame.i + 1, show.sets.length - 1)];
     const inMotion = frame.frac > 0;
@@ -657,8 +661,28 @@ export function create3D(container, { getFrame, onPick }) {
       label.visible = labels || sel.has(p.id);
       if (g.userData.silk) waveSilk(g.userData.silk, now + g.userData.seed);
     }
+    // first person: hide your own body (your arms and horn would block the view), put the camera at your eyes
+    const fpNow = firstPerson && people.get(firstPerson) && frame.pos[firstPerson] ? firstPerson : null;
+    if (fpNow !== fpId) {
+      if (fpId && people.get(fpId)) people.get(fpId).visible = true;
+      fpId = fpNow;
+      look.yaw = look.pitch = 0; look.drag = null;
+      controls.enabled = !fpId;
+      camera.near = fpId ? 0.05 : 0.5;
+      followLast = null; resize(); // resize resets the field of view
+    }
+    if (fpId) {
+      const g = people.get(fpId), { head } = g.userData.parts;
+      g.visible = false; pointer.visible = false;
+      if (!look.drag && performance.now() - look.released > 1200) { look.yaw *= 0.93; look.pitch *= 0.93; }
+      g.updateMatrixWorld(true);
+      const eye = head.localToWorld(new THREE.Vector3(0, 0.2, 0.16));
+      const yawW = g.userData.yaw.body + head.rotation.y + look.yaw, pitch = -0.09 + look.pitch;
+      camera.position.copy(eye);
+      camera.lookAt(eye.x + Math.sin(yawW) * Math.cos(pitch), eye.y + Math.sin(pitch), eye.z + Math.cos(yawW) * Math.cos(pitch));
+    }
     // follow one performer (student view): move camera + orbit target along with them
-    if (follow && frame.pos[follow]) {
+    else if (follow && frame.pos[follow]) {
       const q = frame.pos[follow], tgt = new THREE.Vector3(q.x, 1.6, toZ(q.y));
       pointer.visible = true; pointer.position.set(q.x, 5.2 + Math.sin(performance.now() / 300) * 0.15, toZ(q.y));
       if (!followLast || followFrom !== followSide) {
@@ -688,7 +712,7 @@ export function create3D(container, { getFrame, onPick }) {
     renderer.domElement.style.width = w + 'px'; renderer.domElement.style.height = h + 'px';
     camera.aspect = w / h;
     // keep the whole field in frame on narrow screens
-    camera.fov = w / h < 1.2 ? 55 : 40;
+    camera.fov = fpId ? (w / h < 1.2 ? 80 : 68) : w / h < 1.2 ? 55 : 40; // first person: wider, like your own eyes
     camera.updateProjectionMatrix();
   }
   new ResizeObserver(resize).observe(container);
@@ -696,8 +720,21 @@ export function create3D(container, { getFrame, onPick }) {
   // click (not drag) on a person → select them
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   let down = null;
-  renderer.domElement.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
+  renderer.domElement.addEventListener('pointerdown', e => {
+    down = { x: e.clientX, y: e.clientY };
+    if (fpId) { look.drag = { x: e.clientX, y: e.clientY, yaw: look.yaw, pitch: look.pitch }; renderer.domElement.setPointerCapture(e.pointerId); }
+  });
+  renderer.domElement.addEventListener('pointermove', e => {
+    if (!fpId || !look.drag) return;
+    const k = 2.2 / Math.max(300, renderer.domElement.clientWidth); // a full-width drag turns about 125°
+    look.yaw = Math.max(-2.6, Math.min(2.6, look.drag.yaw + (e.clientX - look.drag.x) * k));
+    look.pitch = Math.max(-0.9, Math.min(0.6, look.drag.pitch + (e.clientY - look.drag.y) * k));
+  });
+  const endLook = () => { if (look.drag) { look.drag = null; look.released = performance.now(); } };
+  renderer.domElement.addEventListener('pointercancel', endLook);
   renderer.domElement.addEventListener('pointerup', e => {
+    endLook();
+    if (fpId) { down = null; return; }
     if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) { down = null; return; }
     down = null;
     const r = renderer.domElement.getBoundingClientRect();
