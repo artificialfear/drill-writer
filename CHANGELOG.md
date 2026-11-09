@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.19.0 — 2026-11-08
+- **Drum major on a podium.** The drum major stands on a 3-ft black podium with a silver edge, a teal band, and steps up the back. They face the center of the band wherever they stand (before, they faced the audience). The podium goes wherever the drum major's dot is.
+- **Conducts in time with the drill.**
+  - Uses a 4-beat pattern: 1 down, 2 in, 3 out, 4 up, with a rebound between beats. Both hands mirror each other.
+  - The hand hits each beat exactly on the count, so it follows play, practice, tempo changes, and dragging the set slider.
+  - Count 1 of the show is beat 1, and the move into count 1 is the prep.
+  - When the drill is stopped, the arms rest up in a ready position.
+- **No drum major in the show?** A stand-in drum major on a podium appears at the 50, 4 steps in front of the front sideline. It can't be clicked and isn't part of the drill; it's just there so there's someone to watch. Bass drum heads watch it too.
+- **Students can see the drum major.**
+  - The Performer 3D camera on student phones is lower and looks further forward, so the drum major is in the picture along with the student and their neighbors.
+  - In student 3D and Eyes views, the drum major's name tag stays on so they're easy to find.
+
 ## 0.18.0 — 2026-11-08
 - **Eyes view (first person) on student phones.** A third button next to 2D / 3D shows the field from the student's own eyes at their spot, looking where they'd be looking.
   - Winds look toward the box, even while sliding.

@@ -350,9 +350,9 @@ function upperBody(sec, tone, opts = {}) {
     // sousaphone players wear the shako without a plume (it would hit the bell), like they do for real
     if (sec.key !== 'tuba') for (const [x, y, z, r, col] of feathers) hd.push(ball(V(x, top + y * s, 0.08 + z * s), r * s, col, 0.85, 1.35, 0.85));
   }
-  // arms (black sleeves) from shoulders to hands
+  // arms (black sleeves) from shoulders to hands — not for the drum major, whose arms conduct (see dmArms)
   const ins = instrument(sec.key, opts);
-  for (const s of ['L', 'R']) {
+  if (!dm) for (const s of ['L', 'R']) {
     const sh = SH[s], hd = ins.hands[s], sign = s === 'L' ? -1 : 1;
     const el = ins.elbows ? ins.elbows[s] : sh.clone().add(hd).multiplyScalar(0.5).add(V(sign * 0.13, -0.14, -0.04));
     g.push(limb(sh, el, guard ? 0.064 : 0.078, guard ? skin : COL.black));
@@ -447,6 +447,13 @@ function buildPerson(p) {
   const ring = new THREE.Mesh(GEO.ring, MAT.ring); ring.position.y = 0.05; ring.visible = false; ring.renderOrder = 2;
   const label = labelSprite(p.label);
   root.add(shadow, ring, label);
+  if (sec.family === 'dm') { // drum major stands on a podium and conducts
+    const podium = new THREE.Mesh(PODIUM, MAT.upper); root.add(podium);
+    root.userData.podium = podium; root.userData.lift = PODIUM_H;
+    root.userData.arms = dmArms(body, hash(p.id) % SKIN.length);
+    root.userData.conduct = 0;
+    label.position.y += PODIUM_H;
+  }
   root.userData.parts = { body, hips, head, L, R, ring, label };
   root.userData.bass = sec.key === 'bass';
   root.userData.family = sec.family;
@@ -455,6 +462,64 @@ function buildPerson(p) {
   root.userData.seed = (hash(p.id) % 1000) / 159;
   root.traverse(o => { o.userData.pid = p.id; });
   return root;
+}
+
+// ---------- Drum major: podium + conducting ----------
+const PODIUM_H = 1.6; // about 3 ft
+const PODIUM = (() => {
+  const g = [];
+  g.push(box(V(0, PODIUM_H / 2, 0), 1.9, PODIUM_H, 1.9, '#1d1e22'));
+  g.push(box(V(0, PODIUM_H - 0.03, 0), 1.98, 0.06, 1.98, COL.silver));       // top edge
+  g.push(box(V(0, PODIUM_H * 0.5, 0.955), 1.6, 0.18, 0.02, COL.teal));      // teal band on the band-facing side
+  for (let k = 0; k < 3; k++) {                                              // steps up the back (away from the band)
+    const h = PODIUM_H * (k + 1) / 4;
+    g.push(box(V(0, h / 2, -0.95 - 0.3 * (3 - k) + 0.15), 0.9, h, 0.3, '#2a2b30'));
+  }
+  return THREE.mergeGeometries(g);
+})();
+const ARM = { up: new THREE.CylinderGeometry(0.078, 0.07, 1, 10).translate(0, 0.5, 0), fore: new THREE.CylinderGeometry(0.066, 0.058, 1, 10).translate(0, 0.5, 0),
+  joint: new THREE.SphereGeometry(0.075, 10, 8), hand: new THREE.SphereGeometry(0.066, 10, 8).scale(1, 0.9, 1.15) };
+const SLEEVE = new THREE.MeshLambertMaterial({ color: COL.black });
+const skinMats = new Map();
+const skinMat = tone => { if (!skinMats.has(tone)) skinMats.set(tone, new THREE.MeshLambertMaterial({ color: SKIN[tone] })); return skinMats.get(tone); };
+function dmArms(body, tone) {
+  const arms = {};
+  for (const sd of ['L', 'R']) {
+    const up = new THREE.Mesh(ARM.up, SLEEVE), fore = new THREE.Mesh(ARM.fore, SLEEVE);
+    const sh = new THREE.Mesh(ARM.joint, SLEEVE), el = new THREE.Mesh(ARM.joint, SLEEVE), hand = new THREE.Mesh(ARM.hand, skinMat(tone));
+    sh.position.copy(SH[sd]);
+    body.add(up, fore, sh, el, hand);
+    arms[sd] = { up, fore, el, hand };
+  }
+  return arms;
+}
+const _q = new THREE.Quaternion(), _d = new THREE.Vector3();
+function segment(mesh, a, b) {
+  _d.subVectors(b, a); const len = _d.length();
+  mesh.position.copy(a); mesh.quaternion.copy(_q.setFromUnitVectors(UP, _d.divideScalar(len || 1))); mesh.scale.set(1, len, 1);
+}
+// 4-beat conducting pattern for the right hand, as the drum major sees it (x = toward their own right):
+// 1 down, 2 in, 3 out, 4 up. Between beats the hand rebounds up in an arc and falls into the next beat.
+const ICTUS = { 1: [0.32, 2.28], 2: [-0.02, 2.55], 3: [0.82, 2.58], 4: [0.42, 2.84] };
+const REBOUND = { 1: 0.3, 2: 0.18, 3: 0.2, 4: 0.48 }; // height of the arc leaving each beat
+const READY = [0.34, 2.98];                              // "ready" — arms up, before the downbeat
+function conductHand(count) {
+  const k = Math.floor(count), u = count - k;
+  const b = ((((k - 1) % 4) + 4) % 4) + 1, nb = (b % 4) + 1; // count 1 = beat 1; count 0 → beat 4 (the prep)
+  const [x0, y0] = ICTUS[b], [x1, y1] = ICTUS[nb];
+  const t = Math.pow(u, 0.75); // peak of the rebound comes early, then the hand accelerates into the beat
+  return [x0 + (x1 - x0) * u, y0 + (y1 - y0) * t + REBOUND[b] * Math.sin(Math.PI * t), 0.5 + 0.08 * Math.sin(Math.PI * u)];
+}
+function poseArms(g, count, w) {
+  const c = conductHand(count);
+  for (const sd of ['L', 'R']) { // the right hand (−X) leads; the left mirrors it
+    const sign = sd === 'L' ? -1 : 1, a = g.userData.arms[sd];
+    const xr = READY[0] + (c[0] - READY[0]) * w, y = READY[1] + (c[1] - READY[1]) * w, z = 0.36 + (c[2] - 0.36) * w;
+    const hand = V(sign * xr, y, z), sh = SH[sd];
+    const el = sh.clone().lerp(hand, 0.5).add(V(sign * 0.18, -0.16, -0.06));
+    segment(a.up, sh, el); segment(a.fore, el, hand);
+    a.el.position.copy(el); a.hand.position.copy(hand);
+  }
 }
 
 // ---------- Stepping ----------
@@ -500,7 +565,7 @@ function applyPose(g, target, snap) {
   // three.js: +rotation.x swings a hanging leg backward, so forward = negative
   L.thigh.rotation.set(-p.tL, 0, p.zL); L.knee.rotation.x = p.kL; L.ankle.rotation.x = p.fL;
   R.thigh.rotation.set(-p.tR, 0, p.zR); R.knee.rotation.x = p.kR; R.ankle.rotation.x = p.fR;
-  body.position.y = p.y;
+  body.position.y = p.y + (g.userData.lift || 0);
 }
 function waveSilk(silk, t) {
   const pos = silk.geometry.attributes.position, base = silk.userData.base;
@@ -548,6 +613,8 @@ export function create3D(container, { getFrame, onPick }) {
   // first-person ("Eyes") view: camera in one performer's head, looking where they look.
   // Drag to glance around; the view drifts back to straight ahead a moment after letting go.
   let fpId = null;
+  let virtualDm = null, lastCount = null, lastCountAt = 0;
+  const VIRTUAL_DM_SPOT = { x: 0, y: -4 };
   const look = { yaw: 0, pitch: 0, drag: null, released: 0 };
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 2000);
@@ -601,6 +668,14 @@ export function create3D(container, { getFrame, onPick }) {
     for (const g of people.values()) { peopleGroup.remove(g); g.userData.parts.label.material.map.dispose(); g.userData.parts.label.material.dispose(); }
     people.clear();
     for (const p of show.performers) { const g = buildPerson(p); people.set(p.id, g); peopleGroup.add(g); }
+    // no drum major in the drill? put one on a podium at the 50, 4 steps in front of the front sideline,
+    // so the band (and students in 3D / Eyes) always have someone to watch
+    if (virtualDm) { peopleGroup.remove(virtualDm); virtualDm = null; }
+    if (!show.performers.some(p => p.section === 'dm')) {
+      virtualDm = buildPerson({ id: '__dm', label: 'DM', section: 'dm' });
+      virtualDm.traverse(o => { o.userData.noPick = true; delete o.userData.pid; });
+      peopleGroup.add(virtualDm);
+    }
   }
   function syncProps(show) {
     const key = show.props.map(p => `${p.id}:${p.kind}:${p.w}:${p.h}:${p.color}`).join('|');
@@ -620,9 +695,34 @@ export function create3D(container, { getFrame, onPick }) {
     const local = inMotion ? frame.frac * (B.counts || 0) : 0; // counts into this move
     const now = performance.now() / 1000;
     const dmId = (show.performers.find(p => p.section === 'dm') || {}).id;
+    const dmSpot = dmId ? frame.pos[dmId] : VIRTUAL_DM_SPOT;
+    // conducting while the counts are moving (playing / practicing / scrubbing); arms up and ready when stopped
+    if (count !== lastCount) { lastCount = count; lastCountAt = performance.now(); }
+    const conducting = performance.now() - lastCountAt < 250;
+    // the band's centre, for the drum major to face
+    let bx = 0, by = 0, bn = 0;
+    for (const p of show.performers) if (p.section !== 'dm' && frame.pos[p.id]) { bx += frame.pos[p.id].x; by += frame.pos[p.id].y; bn++; }
+    const bandC = bn ? { x: bx / bn, y: by / bn } : { x: 0, y: 30 };
+    const poseDm = (g, q) => {
+      g.position.set(q.x, 0, toZ(q.y));
+      const yaw = g.userData.yaw, want = Math.atan2(bandC.x - q.x, q.y - bandC.y);
+      yaw.body = turnToward(yaw.body, want);
+      g.userData.parts.body.rotation.y = yaw.body; g.userData.podium.rotation.y = yaw.body;
+      g.userData.parts.hips.rotation.y = 0;
+      applyPose(g, REST, false);
+      g.userData.conduct += ((conducting ? 1 : 0) - g.userData.conduct) * 0.15;
+      poseArms(g, count, g.userData.conduct);
+    };
+    if (virtualDm) { poseDm(virtualDm, VIRTUAL_DM_SPOT); virtualDm.userData.parts.label.visible = labels || !!(follow || firstPerson); }
     for (const p of show.performers) {
       const g = people.get(p.id); if (!g) continue;
       const q = frame.pos[p.id];
+      if (g.userData.podium) { // drum major: on the podium, facing the band, conducting
+        poseDm(g, q);
+        g.userData.parts.ring.visible = sel.has(p.id);
+        g.userData.parts.label.visible = labels || sel.has(p.id) || !!(follow || firstPerson); // students can always find the DM
+        continue;
+      }
       g.position.set(q.x, 0, toZ(q.y));
       const { body, hips, ring, label } = g.userData.parts;
       // stepping only while actually moving (not during a hold before or after)
@@ -643,7 +743,7 @@ export function create3D(container, { getFrame, onPick }) {
         }
         yaw.body = turnToward(yaw.body, facing);
         // head watches the drum major (or the press box if there isn't one), within what a neck can do
-        const dmQ = dmId && frame.pos[dmId];
+        const dmQ = dmSpot;
         const want = dmQ ? Math.atan2(dmQ.x - q.x, q.y - dmQ.y) : 0;
         let rel = want - yaw.body;
         while (rel > Math.PI) rel -= 2 * Math.PI;
@@ -684,12 +784,15 @@ export function create3D(container, { getFrame, onPick }) {
     // follow one performer (student view): move camera + orbit target along with them
     else if (follow && frame.pos[follow]) {
       const q = frame.pos[follow], tgt = new THREE.Vector3(q.x, 1.6, toZ(q.y));
-      pointer.visible = true; pointer.position.set(q.x, 5.2 + Math.sin(performance.now() / 300) * 0.15, toZ(q.y));
+      pointer.visible = true; pointer.position.set(q.x, 5.2 + ((people.get(follow) || {}).userData?.lift || 0) + Math.sin(performance.now() / 300) * 0.15, toZ(q.y));
       if (!followLast || followFrom !== followSide) {
         // performer: just behind and above the marcher, looking toward the audience; director: from the front
         followSide = followFrom;
         controls.target.copy(tgt);
-        if (followFrom === "performer") camera.position.set(tgt.x, 15, tgt.z - 12);
+        if (followFrom === "performer") { // behind you, looking toward the front — low enough to see the drum major
+          camera.position.set(tgt.x, 8, tgt.z - 16);
+          controls.target.set(tgt.x, 2, tgt.z + 6);
+        }
         else camera.position.set(tgt.x, 24, tgt.z + 38);
       }
       else { const d = tgt.clone().sub(followLast); camera.position.add(d); controls.target.add(d); }
