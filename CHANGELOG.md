@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.20.1 — 2026-11-08
+- Flutes are real length now (about 26½″, up from about 15″), angled slightly down, with a lip plate and keys. The left hand sits a few inches down the flute from the lip plate instead of at the face, and the right hand sits on the lower keys. Piccolos get the same treatment at real piccolo length (about 12½″).
+
 ## 0.20.0 — 2026-11-08
 - **Uniform pass: marchers look much more like the real band.**
   - **Shaped jacket:** a real torso shape with chest, waist, and a hem that flares over the hips. The uniform pattern is now a texture, so the teal yoke, silver band, and silver piping have crisp, smooth edges. It has a satin finish.

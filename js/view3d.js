@@ -206,11 +206,17 @@ function instrument(key, opts = {}) {
       hands = { L: V(-0.18, 2.2, 0.42), R: V(0.36, 2.22, 0.22) };
       break;
     }
-    case 'flute': case 'piccolo': { // played out to the marcher's right
-      const len = key === 'flute' ? 0.66 : 0.32;
-      g.push(tube(V(0.12, 2.71, 0.21), V(0.12 - len, 2.67, 0.24), 0.016, COL.flute));
-      hands = { L: V(0.12 - len * 0.72, 2.66, 0.26), R: V(0.0, 2.67, 0.25) };
-      elbows = { L: V(-0.42, 2.38, 0.08), R: V(0.2, 2.35, 0.32) };
+    case 'flute': case 'piccolo': { // played out to the marcher's right (−X), angled slightly down
+      // real lengths: flute ≈ 26½" (1.18 steps), piccolo ≈ 12½" (0.56 steps); the closed end sticks out a little past the mouth
+      const flute = key === 'flute', len = flute ? 1.18 : 0.56;
+      const a = V(0.12, 2.71, 0.21), b = V(0.12 - len, flute ? 2.6 : 2.66, flute ? 0.26 : 0.23);
+      const at = d => a.clone().lerp(b, d / len); // a point d steps along the flute from the closed end
+      g.push(tube(a, b, flute ? 0.017 : 0.014, COL.flute));
+      g.push(box(at(0.12).add(V(0, 0.016, 0)), 0.05, 0.006, 0.035, COL.flute)); // lip plate
+      for (const d of (flute ? [0.42, 0.5, 0.58, 0.72, 0.8, 0.88] : [0.24, 0.29, 0.34, 0.42, 0.47])) g.push(ball(at(d).add(V(0, 0.017, 0)), 0.012, COL.flute)); // keys
+      // left hand (+X) a few inches down from the lip plate, right hand (−X) further along on the lower keys
+      hands = { L: at(flute ? 0.82 : 0.44).add(V(0, -0.03, 0.01)), R: at(flute ? 0.47 : 0.28).add(V(0, -0.035, 0.02)) };
+      elbows = { L: V(-0.5, 2.3, 0.14), R: V(0.16, 2.28, 0.32) };
       break;
     }
     case 'clarinet': {
