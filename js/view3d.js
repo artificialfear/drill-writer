@@ -2,7 +2,7 @@
 // World units are steps, same as the 2D editor. Three.js mapping: X = x, Y = up, Z = FIELD_DEPTH/2 - y,
 // so the front sideline (audience) is toward +Z.
 import * as THREE from '../vendor/three-bundle.min.js';
-import { FIELD_DEPTH, GOAL_X, END_X, refLines, sectionByKey, pathFrac, moveStep } from './model.js';
+import { FIELD_DEPTH, GOAL_X, END_X, refLines, sectionByKey, pathFrac, moveStep, lookFrame, facingByKey } from './model.js';
 import { technique, bassFacing, legsFor } from './technique.js';
 
 const HALF_D = FIELD_DEPTH / 2;
@@ -234,8 +234,13 @@ function instrument(key, opts = {}) {
       g.push(...drum(c, r, h));
       for (const s of [-1, 1]) g.push(tube(V(s * 0.13, 2.38, 0.17), V(s * 0.1, 2.02, 0.22), 0.022, COL.chrome, 6));
       g.push(box(V(0, 2.02, 0.22), 0.26, 0.04, 0.05, COL.chrome), tube(V(0, 2.02, 0.24), V(0, top + 0.02, c.z - r + 0.02), 0.024, COL.chrome, 6));
-      hands = { L: V(-0.29, top + 0.15, 0.36), R: V(0.29, top + 0.15, 0.36) };
-      for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.04, top + 0.035, c.z + 0.06)));
+      if (opts.down) { // sticks in: hands at the rim, sticks pointing down along the sides of the drum
+        hands = { L: V(-0.33, top + 0.02, 0.4), R: V(0.33, top + 0.02, 0.4) };
+        for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.37, top - 0.42, 0.52)));
+      } else {
+        hands = { L: V(-0.29, top + 0.15, 0.36), R: V(0.29, top + 0.15, 0.36) };
+        for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.04, top + 0.035, c.z + 0.06)));
+      }
       break;
     }
     case 'tenors': { // quints (top-down like a real carrier): 13" and 14" out at the sides, 10" and 12" in front,
@@ -248,24 +253,35 @@ function instrument(key, opts = {}) {
       // bar the drums hang from: across the back, out to the side drums
       g.push(tube(V(-0.45, top - 0.12, 0.42), V(0.45, top - 0.12, 0.42), 0.02, COL.chrome, 6));
       for (const s of [-1, 1]) g.push(tube(V(s * 0.45, top - 0.12, 0.42), V(s * 0.5, top - 0.12, 0.62), 0.02, COL.chrome, 6));
-      hands = { L: V(-0.34, top + 0.17, 0.48), R: V(0.34, top + 0.17, 0.48) };
-      for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.12, top + 0.05, 0.92)));
+      if (opts.down) {
+        hands = { L: V(-0.3, top + 0.03, 0.34), R: V(0.3, top + 0.03, 0.34) };
+        for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.27, top + 0.06, 0.82)));
+      } else {
+        hands = { L: V(-0.34, top + 0.17, 0.48), R: V(0.34, top + 0.17, 0.48) };
+        for (const s of [-1, 1]) g.push(...stick(hands[s < 0 ? 'L' : 'R'], V(s * 0.12, top + 0.05, 0.92)));
+      }
       break;
     }
     case 'bass': { // heads face the sides, drum high on the chest; size from the bass number (1 smallest … 5 largest)
       const r = BASS_R[(opts.bass || 3) - 1], w = 0.56, c = V(0, 2.04, 0.2 + r + 0.06);
       g.push(...drum(c, r, w, 'x', COL.white));
       for (const s of [-1, 1]) g.push(tube(V(s * 0.16, 2.4, 0.17), V(s * 0.14, c.y + r * 0.35, c.z - r + 0.04), 0.022, COL.chrome, 6));
-      hands = { L: V(-(w / 2 + 0.14), c.y - 0.06, c.z), R: V(w / 2 + 0.14, c.y - 0.06, c.z) };
+      const dy = opts.down ? -0.3 : -0.06; // mallets in: hands lower, mallet heads down by the bottom of the drum
+      hands = { L: V(-(w / 2 + 0.14), c.y + dy, c.z), R: V(w / 2 + 0.14, c.y + dy, c.z) };
       for (const s of [-1, 1]) {
-        const tip = V(s * (w / 2 + 0.07), c.y + 0.16, c.z + 0.05);
+        const tip = opts.down ? V(s * (w / 2 + 0.12), c.y + dy - 0.32, c.z + 0.1) : V(s * (w / 2 + 0.07), c.y + 0.16, c.z + 0.05);
         g.push(...stick(hands[s < 0 ? 'L' : 'R'], tip, COL.stick, 0.014), ball(tip, 0.075, COL.felt, 0.8, 1, 1));
       }
       break;
     }
     case 'cymbal': {
-      for (const s of [-1, 1]) g.push(paint(new THREE.CylinderGeometry(0.23, 0.23, 0.014, 22).rotateZ(Math.PI / 2).translate(s * 0.11, 2.08, 0.42), COL.bronze));
-      hands = { L: V(-0.16, 2.08, 0.42), R: V(0.16, 2.08, 0.42) };
+      if (opts.down) { // plates down at the sides
+        for (const s of [-1, 1]) g.push(paint(new THREE.CylinderGeometry(0.23, 0.23, 0.014, 22).rotateZ(Math.PI / 2).translate(s * 0.4, 1.66, 0.12), COL.bronze));
+        hands = { L: V(-0.36, 1.66, 0.12), R: V(0.36, 1.66, 0.12) };
+      } else {
+        for (const s of [-1, 1]) g.push(paint(new THREE.CylinderGeometry(0.23, 0.23, 0.014, 22).rotateZ(Math.PI / 2).translate(s * 0.11, 2.08, 0.42), COL.bronze));
+        hands = { L: V(-0.16, 2.08, 0.42), R: V(0.16, 2.08, 0.42) };
+      }
       break;
     }
     case 'pit': {
@@ -276,13 +292,9 @@ function instrument(key, opts = {}) {
       hands = { L: V(-0.22, 1.6, 0.4), R: V(0.22, 1.6, 0.4) };
       break;
     }
-    case 'guard': { // the silk is a separate mesh so it can wave
-      g.push(tube(V(0.36, 0.5, 0.28), V(0.36, 3.75, 0.28), 0.024, COL.chrome, 6));
-      g.push(ball(V(0.36, 3.77, 0.28), 0.04, COL.chrome), ball(V(0.36, 0.48, 0.28), 0.04, COL.chrome));
-      hands = { L: V(0.33, 2.32, 0.27), R: V(0.33, 1.72, 0.27) };
-      elbows = { L: V(-0.08, 2.12, 0.28), R: V(0.42, 1.98, 0.08) };
+    case 'guard': // the flag (pole + silk) and arms are posed every frame (see FLAG_POSES)
+      hands = { L: V(-0.34, 1.66, 0.06), R: V(0.34, 1.66, 0.06) };
       break;
-    }
     case 'dm': // conducting
       hands = { L: V(-0.52, 2.92, 0.32), R: V(0.52, 2.92, 0.32) };
       elbows = { L: V(-0.6, 2.55, 0.12), R: V(0.6, 2.55, 0.12) };
@@ -385,9 +397,24 @@ function plume(top, scale, seed) {
   return out;
 }
 
+// Horns down: the whole instrument (and the hands holding it) swings down in front of the body.
+// Rotate about the point between the hands, then move that point down to the stomach.
+function hornsDown(ins, key) {
+  if (key === 'tuba') return; // the sousaphone stays on the shoulder
+  const P = ins.hands.L.clone().add(ins.hands.R).multiplyScalar(0.5);
+  let R, to;
+  if (key === 'flute' || key === 'piccolo') { R = new THREE.Matrix4().makeRotationZ(1.25); to = V(-0.12, 1.98, 0.3); } // flute points down the right side
+  else if (key === 'clarinet' || key.endsWith('sax')) { R = new THREE.Matrix4().makeRotationX(0.55); to = V(P.x, 1.86, 0.36); }
+  else { R = new THREE.Matrix4().makeRotationX(1.15); to = V(P.x, 1.95, 0.38); } // bell swings from forward to down
+  const M = new THREE.Matrix4().makeTranslation(to.x, to.y, to.z).multiply(R).multiply(new THREE.Matrix4().makeTranslation(-P.x, -P.y, -P.z));
+  for (const geo of ins.geos) geo.applyMatrix4(M);
+  ins.hands = { L: ins.hands.L.clone().applyMatrix4(M), R: ins.hands.R.clone().applyMatrix4(M) };
+  ins.elbows = null;
+}
+
 const upperCache = new Map();
 function upperBody(sec, tone, opts = {}) {
-  const key = `${sec.key}|${tone}|${opts.bass || ''}`;
+  const key = `${sec.key}|${tone}|${opts.bass || ''}|${opts.down ? 'down' : 'up'}`;
   if (upperCache.has(key)) return upperCache.get(key);
   const skin = SKIN[tone], hair = HAIR[tone], guard = sec.family === 'guard', dm = sec.family === 'dm';
   const g = [];
@@ -445,7 +472,8 @@ function upperBody(sec, tone, opts = {}) {
   }
   // arms (fuller black sleeves) from shoulders to hands — not for the drum major, whose arms conduct (see dmArms)
   const ins = instrument(sec.key, opts);
-  if (!dm) for (const s of ['L', 'R']) {
+  if (opts.down && sec.family === 'wind') hornsDown(ins, sec.key);
+  if (!dm && !guard) for (const s of ['L', 'R']) {
     const sh = SH[s], hand = ins.hands[s], sign = s === 'L' ? -1 : 1;
     const el = ins.elbows ? ins.elbows[s] : sh.clone().add(hand).multiplyScalar(0.5).add(V(sign * 0.13, -0.14, -0.04));
     g.push(limb(sh, el, guard ? 0.064 : 0.09, guard ? skin : COL.black));
@@ -528,9 +556,19 @@ function buildPerson(p) {
   const body = new THREE.Group(); root.add(body);
   // bass drums are sized by the bass number in the label (D1 = smallest … D5 = largest)
   const opts = sec.key === 'bass' ? { bass: Math.min(5, Math.max(1, parseInt(String(p.label).replace(/\D+/g, ''), 10) || 3)) } : {};
-  const up = upperBody(sec, hash(p.id) % SKIN.length, opts);
-  body.add(new THREE.Mesh(up.body, MAT.upper));
-  if (up.metal) body.add(new THREE.Mesh(up.metal, MAT.metal));
+  const tone = hash(p.id) % SKIN.length;
+  const up = upperBody(sec, tone, opts);
+  const hornUp = [new THREE.Mesh(up.body, MAT.upper)];
+  if (up.metal) hornUp.push(new THREE.Mesh(up.metal, MAT.metal));
+  body.add(...hornUp);
+  // horns down / sticks in: a second version of the arms + instrument, swapped in on the count (it's a snap)
+  let hornDown = null;
+  if ((sec.family === 'wind' && sec.key !== 'tuba') || sec.family === 'battery') {
+    const dn = upperBody(sec, tone, { ...opts, down: true });
+    hornDown = [new THREE.Mesh(dn.body, MAT.upper)];
+    if (dn.metal) hornDown.push(new THREE.Mesh(dn.metal, MAT.metal));
+    hornDown.forEach(m => { m.visible = false; body.add(m); });
+  }
   if (sec.family !== 'guard') { const j = jacket(); body.add(new THREE.Mesh(j.geo, j.mat)); }
   const head = new THREE.Group(); head.position.y = NECK_Y; body.add(head);
   head.add(new THREE.Mesh(up.head, MAT.upper));
@@ -538,11 +576,10 @@ function buildPerson(p) {
   hips.add(new THREE.Mesh(GEO.pelvis, MAT.pants));
   const L = makeLeg(1, sec.family === 'guard'), R = makeLeg(-1, sec.family === 'guard'); // marcher's left leg is on +X
   hips.add(L.thigh, R.thigh);
-  if (sec.family === 'guard') {
-    const geo = new THREE.PlaneGeometry(1.3, 0.85, 10, 3).translate(0.65, 0, 0);
-    const silk = new THREE.Mesh(geo, silkMat(sec)); silk.position.set(0.37, 3.3, 0.28);
-    silk.userData.base = Float32Array.from(geo.attributes.position.array);
-    body.add(silk); root.userData.silk = silk;
+  if (sec.family === 'guard') { // posable flag + arms
+    const { flag, silk } = buildFlag(sec);
+    body.add(flag); root.userData.flag = flag; root.userData.silk = silk;
+    root.userData.arms = dmArms(body, tone, true);
   }
   const shadow = new THREE.Mesh(GEO.shadow, MAT.shadow); shadow.position.y = 0.03; shadow.renderOrder = 1; shadow.userData.noPick = true;
   const ring = new THREE.Mesh(GEO.ring, MAT.ring); ring.position.y = 0.05; ring.visible = false; ring.renderOrder = 2;
@@ -551,11 +588,12 @@ function buildPerson(p) {
   if (sec.family === 'dm') { // drum major stands on a podium and conducts
     const podium = new THREE.Mesh(PODIUM, MAT.upper); root.add(podium);
     root.userData.podium = podium; root.userData.lift = PODIUM_H;
-    root.userData.arms = dmArms(body, hash(p.id) % SKIN.length);
+    root.userData.arms = dmArms(body, tone);
     root.userData.conduct = 0;
     label.position.y += PODIUM_H;
   }
   root.userData.parts = { body, hips, head, L, R, ring, label };
+  root.userData.horns = { up: hornUp, down: hornDown, state: 'up' };
   root.userData.bass = sec.key === 'bass';
   root.userData.family = sec.family;
   root.userData.yaw = { hips: 0, body: 0, head: 0 };
@@ -583,11 +621,13 @@ const ARM = { up: new THREE.CylinderGeometry(0.09, 0.08, 1, 10).translate(0, 0.5
 const SLEEVE = new THREE.MeshLambertMaterial({ color: COL.black });
 const skinMats = new Map();
 const skinMat = tone => { if (!skinMats.has(tone)) skinMats.set(tone, new THREE.MeshLambertMaterial({ color: SKIN[tone] })); return skinMats.get(tone); };
-function dmArms(body, tone) {
-  const arms = {};
+const GUARD_ARM = { up: new THREE.CylinderGeometry(0.064, 0.058, 1, 10).translate(0, 0.5, 0), fore: new THREE.CylinderGeometry(0.056, 0.048, 1, 10).translate(0, 0.5, 0),
+  joint: new THREE.SphereGeometry(0.062, 10, 8), hand: ARM.hand };
+function dmArms(body, tone, bare) { // bare = skin-coloured arms (guard), otherwise black sleeves
+  const arms = {}, G = bare ? GUARD_ARM : ARM, M = bare ? skinMat(tone) : SLEEVE;
   for (const sd of ['L', 'R']) {
-    const up = new THREE.Mesh(ARM.up, SLEEVE), fore = new THREE.Mesh(ARM.fore, SLEEVE);
-    const sh = new THREE.Mesh(ARM.joint, SLEEVE), el = new THREE.Mesh(ARM.joint, SLEEVE), hand = new THREE.Mesh(ARM.hand, skinMat(tone));
+    const up = new THREE.Mesh(G.up, M), fore = new THREE.Mesh(G.fore, M);
+    const sh = new THREE.Mesh(G.joint, M), el = new THREE.Mesh(G.joint, M), hand = new THREE.Mesh(G.hand, skinMat(tone));
     sh.position.copy(SH[sd]);
     body.add(up, fore, sh, el, hand);
     arms[sd] = { up, fore, el, hand };
@@ -611,6 +651,12 @@ function conductHand(count) {
   const t = Math.pow(u, 0.75); // peak of the rebound comes early, then the hand accelerates into the beat
   return [x0 + (x1 - x0) * u, y0 + (y1 - y0) * t + REBOUND[b] * Math.sin(Math.PI * t), 0.5 + 0.08 * Math.sin(Math.PI * u)];
 }
+function setArm(a, sd, hand, elbowOut = 0.16) {
+  const sign = sd === 'L' ? -1 : 1, sh = SH[sd];
+  const el = sh.clone().lerp(hand, 0.5).add(V(sign * elbowOut, -0.15, -0.05));
+  segment(a.up, sh, el); segment(a.fore, el, hand);
+  a.el.position.copy(el); a.hand.position.copy(hand);
+}
 function poseArms(g, count, w) {
   const c = conductHand(count);
   for (const sd of ['L', 'R']) { // the right hand (−X) leads; the left mirrors it
@@ -621,6 +667,66 @@ function poseArms(g, count, w) {
     segment(a.up, sh, el); segment(a.fore, el, hand);
     a.el.position.copy(el); a.hand.position.copy(hand);
   }
+}
+
+// ---------- Color guard flag work ----------
+// A pose = where the pole's bottom end is (B), which way the pole points (D, bottom → top), which way the silk
+// hangs off the top of the pole (S), and where the two hands go (as distances up the pole, or a fixed point).
+// Body coordinates: the marcher faces +Z, their right is −X.
+const POLE = 3.25, SILK_W = 1.3, SILK_H = 0.85;
+const n3 = (x, y, z) => V(x, y, z).normalize();
+const FLAG_POSES = {
+  attention: { B: V(-0.4, 0.06, 0.28), D: n3(0, 1, 0), S: n3(-1, 0, 0.2), hR: 1.7, hL: 2.25 },
+  rshoulder: { B: V(-0.3, 1.85, 0.88), D: n3(0, 0.62, -0.78), S: n3(0, -1, 0), hR: 0.35, hL: 0.8 },
+  lshoulder: { B: V(0.3, 1.85, 0.88), D: n3(0, 0.62, -0.78), S: n3(0, -1, 0), hR: 0.8, hL: 0.35 },
+  present:   { B: V(0, 0.3, 0.5), D: n3(0, 1, 0.05), S: n3(1, 0, 0), hR: 1.45, hL: 2.05 },
+  angleR:    { B: V(0.35, 1.25, 0.5), D: n3(-1, 1, 0.1), S: n3(0, -1, 0), hR: 0.25, hL: 0.75 },
+  angleL:    { B: V(-0.35, 1.25, 0.5), D: n3(1, 1, 0.1), S: n3(0, -1, 0), hR: 0.75, hL: 0.25 },
+  flat:      { B: V(0.62, 2.05, 0.48), D: n3(-1, 0, 0), S: n3(0, -1, 0), hR: 0.95, hL: 0.35 },
+  overhead:  { B: V(0.62, 3.2, 0.12), D: n3(-1, 0, 0), S: n3(0, 0, -1), hR: 0.95, hL: 0.35 }
+};
+// a pose for any flag key; drop spins are a pose that changes with the count (one turn every 2 counts)
+function flagPose(key, count) {
+  if (key === 'none') return null;
+  if (key === 'spin') {
+    const phi = (count / 2) * Math.PI * 2, G = V(-0.5, 2.0, 0.3), grip = 1.05;
+    const D = V(0, Math.cos(phi), Math.sin(phi)), S = V(0, Math.sin(phi), -Math.cos(phi)); // silk trails the turn
+    return { B: G.clone().addScaledVector(D, -grip), D, S, hR: grip, hL: null, handL: V(0.34, 1.7, 0.16) };
+  }
+  return FLAG_POSES[key] || FLAG_POSES.attention;
+}
+const REST_HANDS = { L: V(-0.34, 1.66, 0.06), R: V(0.34, 1.66, 0.06) };
+function poseHands(p) { // world-of-the-body positions of both hands for a pose (L = marcher's right hand, on −X)
+  if (!p) return { L: REST_HANDS.L.clone(), R: REST_HANDS.R.clone() };
+  return {
+    L: p.B.clone().addScaledVector(p.D, p.hR),
+    R: p.handL ? p.handL.clone() : p.B.clone().addScaledVector(p.D, p.hL)
+  };
+}
+const _m = new THREE.Matrix4();
+function poseFlag(g, fl, count) {
+  const a = flagPose(fl.a, count), b = flagPose(fl.b, count);
+  const w = fl.w * fl.w * (3 - 2 * fl.w); // ease
+  const ha = poseHands(a), hb = poseHands(b);
+  for (const sd of ['L', 'R']) setArm(g.userData.arms[sd], sd, ha[sd].clone().lerp(hb[sd], w), 0.14);
+  const flag = g.userData.flag;
+  let p = null;
+  if (a && b) p = { B: a.B.clone().lerp(b.B, w), D: a.D.clone().lerp(b.D, w).normalize(), S: a.S.clone().lerp(b.S, w) };
+  else p = w < 0.5 ? a : b; // to / from "no flag": it simply appears / goes away halfway through
+  flag.visible = !!p;
+  if (!p) return;
+  const D = p.D, S = p.S.clone().addScaledVector(D, -p.S.dot(D)).normalize(), N = S.clone().cross(D);
+  flag.position.copy(p.B);
+  flag.quaternion.setFromRotationMatrix(_m.makeBasis(S, D, N));
+}
+function buildFlag(sec) {
+  const flag = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.024, POLE, 6).translate(0, POLE / 2, 0), MAT.metal);
+  const geo = new THREE.PlaneGeometry(SILK_W, SILK_H, 10, 3).translate(SILK_W / 2, POLE - SILK_H / 2, 0);
+  const silk = new THREE.Mesh(geo, silkMat(sec));
+  silk.userData.base = Float32Array.from(geo.attributes.position.array);
+  flag.add(pole, silk);
+  return { flag, silk };
 }
 
 // ---------- Stepping ----------
@@ -672,7 +778,7 @@ function waveSilk(silk, t) {
   const pos = silk.geometry.attributes.position, base = silk.userData.base;
   for (let i = 0; i < pos.count; i++) {
     const x = base[i * 3], y = base[i * 3 + 1];
-    const w = x / 1.3;
+    const w = x / SILK_W;
     pos.array[i * 3 + 2] = Math.sin(t * 3.2 - x * 4.2 + y * 1.5) * 0.17 * w;
     pos.array[i * 3 + 1] = y - w * w * 0.08;
   }
@@ -840,14 +946,18 @@ export function create3D(container, { getFrame, onPick }) {
       const moving = inMotion && pf > 0 && pf < 1 && Math.hypot(B.pos[p.id].x - A.pos[p.id].x, B.pos[p.id].y - A.pos[p.id].y) > 0.05;
       // technique for this move: winds slide (hips toward travel, torso to the box), battery crab step,
       // guard/DM turn their whole body; moving backward = hips away from travel, stepping back
-      let t = moving ? technique(g.userData.family, A.pos[p.id], B.pos[p.id], p.section) : null;
+      // the drill's Look settings: facing, horns up/down, flag position — part-way through any change on its count
+      const lf = lookFrame(show, frame.i, frame.frac, p.id);
+      const faceKey = lf.face.w > 0 ? lf.face.b : lf.face.a; // turning (or turned) toward the new facing
+      const setYaw = facingByKey(faceKey).yaw;                 // null = the section's usual facing
+      let t = moving ? technique(g.userData.family, A.pos[p.id], B.pos[p.id], p.section, setYaw) : null;
       const yaw = g.userData.yaw;
       if (g.userData.bass) {
-        // bass drums face the 50 from wherever they are; crossing it, they spin (through facing the audience).
-        // A small dead zone on the 50 stops them flickering back and forth while standing on it.
+        // bass drums face the 50 from wherever they are (unless the drill sets a facing); crossing it, they spin
+        // (through facing the audience). A small dead zone on the 50 stops them flickering while standing on it.
         if (g.userData.side == null || Math.abs(q.x) > 0.3) g.userData.side = q.x < 0 ? -1 : 1;
-        const facing = bassFacing(g.userData.side);
-        if (t) {
+        const facing = setYaw != null ? setYaw : bassFacing(g.userData.side);
+        if (t && setYaw == null) {
           const dx = B.pos[p.id].x - A.pos[p.id].x, dy = B.pos[p.id].y - A.pos[p.id].y;
           t = { ...t, hipYaw: 0, bodyYaw: facing, legs: legsFor(Math.atan2(dx, -dy), facing).legs };
         }
@@ -860,7 +970,14 @@ export function create3D(container, { getFrame, onPick }) {
         while (rel < -Math.PI) rel += 2 * Math.PI;
         yaw.head = turnToward(yaw.head, Math.max(-1.6, Math.min(1.6, rel)));
         g.userData.parts.head.rotation.y = yaw.head;
-      } else yaw.body = turnToward(yaw.body, t ? t.bodyYaw : 0);
+      } else yaw.body = turnToward(yaw.body, t ? t.bodyYaw : setYaw != null ? setYaw : 0);
+      // horns up / down (sticks out / in): a snap on the count
+      const hz = g.userData.horns;
+      if (hz.down) {
+        const want = lf.horns.w >= 0.5 ? lf.horns.b : lf.horns.a;
+        if (want !== hz.state) { hz.state = want; hz.up.forEach(m => { m.visible = want !== 'down'; }); hz.down.forEach(m => { m.visible = want === 'down'; }); }
+      }
+      if (g.userData.flag) poseFlag(g, lf.flag, count);
       yaw.hips = turnToward(yaw.hips, t ? t.hipYaw : 0);
       hips.rotation.y = yaw.hips; body.rotation.y = yaw.body;
       if (t && t.legs !== 'still') {

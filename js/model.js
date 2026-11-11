@@ -119,6 +119,109 @@ export function timingText(mv) {
   return '';
 }
 
+// ---------- Looks: facing, horns up/down, flag position ----------
+// set.look[id] holds only what CHANGES for that student at that set; it then carries forward, set after set,
+// until it's changed again (so "horns down at set 6" stays down until a later set says up).
+//   face:  'front' | 'back' | 'side1' | 'side2' | 'auto' (the section's usual facing)
+//   horns: 'up' | 'down'            (battery: sticks out / sticks in)
+//   flag:  one of FLAGS             (color guard only)
+//   faceAt / hornsAt / flagAt: the count in the move INTO this set when it happens (default: the last count, on arrival)
+// Facing angles use the marcher's-eye convention from technique.js: 0 = to the box, +90° = toward Side 2.
+export const FACINGS = [
+  { key: 'auto',  name: 'Usual for their section', short: 'their usual way', yaw: null },
+  { key: 'front', name: 'Front (to the box)',      short: 'the front',    yaw: 0 },
+  { key: 'back',  name: 'Backfield',               short: 'backfield',    yaw: Math.PI },
+  { key: 'side1', name: 'Side 1',                  short: 'Side 1',       yaw: -Math.PI / 2 },
+  { key: 'side2', name: 'Side 2',                  short: 'Side 2',       yaw: Math.PI / 2 }
+];
+export const FLAGS = [
+  { key: 'attention', name: 'Attention (pole up at the right side)' },
+  { key: 'rshoulder', name: 'Right shoulder' },
+  { key: 'lshoulder', name: 'Left shoulder' },
+  { key: 'present',   name: 'Front present' },
+  { key: 'angleR',    name: 'Right 45° angle' },
+  { key: 'angleL',    name: 'Left 45° angle' },
+  { key: 'flat',      name: 'Flat front' },
+  { key: 'overhead',  name: 'Flat overhead' },
+  { key: 'spin',      name: 'Spinning (drop spins)' },
+  { key: 'none',      name: 'No flag' }
+];
+export const LOOK_DEFAULT = { face: 'auto', horns: 'up', flag: 'attention' };
+const LOOK_KEYS = ['face', 'horns', 'flag'];
+export const facingByKey = k => FACINGS.find(f => f.key === k) || FACINGS[0];
+export const flagByKey = k => FLAGS.find(f => f.key === k) || FLAGS[0];
+export const hasLooks = show => show.sets.some(st => st.look && Object.keys(st.look).length > 0);
+
+// what a student looks like standing AT set i (everything carried forward)
+export function lookAt(show, i, id) {
+  const out = { ...LOOK_DEFAULT };
+  for (let j = 0; j <= i && j < show.sets.length; j++) {
+    const l = show.sets[j].look && show.sets[j].look[id];
+    if (l) for (const k of LOOK_KEYS) if (l[k]) out[k] = l[k];
+  }
+  return out;
+}
+// what changes for a student in the move INTO set i: [{ what, from, to, at }]
+export function lookChanges(show, i, id) {
+  const st = show.sets[i], l = st && st.look && st.look[id];
+  if (!l) return [];
+  const before = i > 0 ? lookAt(show, i - 1, id) : { ...LOOK_DEFAULT }, counts = st.counts || 0, out = [];
+  for (const k of LOOK_KEYS) {
+    if (!l[k] || l[k] === before[k]) continue;
+    const at = counts ? Math.max(1, Math.min(counts, Math.round(l[k + 'At'] || counts))) : 0;
+    out.push({ what: k, from: before[k], to: l[k], at });
+  }
+  return out;
+}
+// the look part-way through a move: frame at set i, fraction f (0..1) of the way to set i + 1.
+// Each of face / horns / flag comes back as { a, b, w }: was a, becoming b, w = how far through the change (0..1).
+const LOOK_WINDOW = { face: 1, horns: 0.5, flag: 1 }; // counts a change takes, ending on its count
+export function lookFrame(show, i, f, id) {
+  const a = lookAt(show, i, id), out = {};
+  for (const k of LOOK_KEYS) out[k] = { a: a[k], b: a[k], w: 0 };
+  if (!(f > 0) || i + 1 >= show.sets.length) return out;
+  const c = f * (show.sets[i + 1].counts || 0);
+  for (const ch of lookChanges(show, i + 1, id)) {
+    const win = LOOK_WINDOW[ch.what];
+    out[ch.what] = { a: ch.from, b: ch.to, w: Math.max(0, Math.min(1, (c - (ch.at - win)) / win)) };
+  }
+  return out;
+}
+// the facing a student holds for most of the move into set i (for naming the step: "slide left, facing backfield")
+export function moveFacing(show, i, id) {
+  const before = i > 0 ? lookAt(show, i - 1, id).face : 'auto';
+  const ch = lookChanges(show, i, id).find(c => c.what === 'face');
+  const counts = (show.sets[i] && show.sets[i].counts) || 0;
+  const key = ch && ch.at <= counts / 2 ? ch.to : before; // turned early = they travel in the new facing
+  return facingByKey(key).yaw; // null = the section's usual facing
+}
+// plain-words list of what a student does in the move into set i ("Turn to face backfield on count 16", …)
+export function lookText(show, i, id, family) {
+  const counts = (show.sets[i] && show.sets[i].counts) || 0;
+  return lookChanges(show, i, id).map(ch => {
+    const when = !counts ? '' : ch.at >= counts ? ` on count ${counts} (arriving)` : ` on count ${ch.at}`;
+    if (ch.what === 'face') return (ch.to === 'auto' ? 'Back to your usual facing' : `Turn to face ${facingByKey(ch.to).short}`) + when;
+    if (ch.what === 'horns') {
+      if (family === 'guard' || family === 'dm' || family === 'pit') return null;
+      const noun = family === 'battery' ? 'Sticks' : 'Horns';
+      return `${noun} ${family === 'battery' ? (ch.to === 'up' ? 'out' : 'in') : ch.to}${when}`;
+    }
+    if (family !== 'guard') return null;
+    return `Flag: ${flagByKey(ch.to).name.replace(/ \(.*\)/, '').toLowerCase()}${when}`;
+  }).filter(Boolean);
+}
+// set (or clear) look values for some students at set i. patch = { face, horns, flag, faceAt, hornsAt, flagAt };
+// a value of null removes that entry ("no change at this set").
+export function setLook(show, i, ids, patch) {
+  const st = show.sets[i]; st.look = st.look || {};
+  for (const id of ids) {
+    const l = { ...(st.look[id] || {}) };
+    for (const [k, v] of Object.entries(patch)) { if (v == null || v === '') delete l[k]; else l[k] = v; }
+    for (const k of LOOK_KEYS) if (!l[k]) delete l[k + 'At'];
+    if (Object.keys(l).length) st.look[id] = l; else delete st.look[id];
+  }
+}
+
 // ---------- Sections ----------
 export const SECTIONS = [
   { key: 'piccolo',  name: 'Piccolo',        prefix: 'P',  family: 'wind', color: '#7fc8f8' },
@@ -181,6 +284,7 @@ export function normalizeShow(s) {
     st.pos = st.pos || {}; st.props = st.props || {}; st.note = st.note || '';
     st.holes = Array.isArray(st.holes) ? st.holes.filter(h => h && isFinite(h.x) && isFinite(h.y)) : [];
     st.timing = st.timing && typeof st.timing === 'object' ? st.timing : {};
+    st.look = st.look && typeof st.look === 'object' ? st.look : {}; // facing / horns / flag changes at this set
     st.forms = Array.isArray(st.forms) ? st.forms.filter(f => f && Array.isArray(f.ids)) : [];
   });
   // every performer/prop needs a position in every set

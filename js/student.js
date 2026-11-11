@@ -2,7 +2,7 @@
 // Show source: ?show=<name> loads shows/<name>.json (published, session 3); otherwise the show saved by
 // the editor on this device (used by "Preview as student", which also live-updates while the editor changes).
 import {
-  FIELD_DEPTH, moveStep, moveTiming, timingText, normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
+  FIELD_DEPTH, moveStep, moveTiming, timingText, moveFacing, lookText, lookFrame, facingByKey, normalizeShow, sectionByKey, SECTIONS, describeX, describeY, stepSize, setStarts, totalCounts, locate, positionsAt
 } from './model.js';
 import { css, drawField, shapePath, propCorners } from './fieldDraw.js';
 import { technique } from './technique.js';
@@ -83,7 +83,8 @@ function myMove(i) { // move INTO set i: step size + technique
   const A = st.show.sets[i - 1].pos[st.me], B = st.show.sets[i].pos[st.me];
   const mv = moveStep(st.show, i, st.me);
   mv.timing = timingText(mv);
-  mv.tech = technique(sectionByKey(me().section).family, A, B, me().section);
+  mv.tech = technique(sectionByKey(me().section).family, A, B, me().section, moveFacing(st.show, i, st.me));
+  mv.looks = lookText(st.show, i, st.me, sectionByKey(me().section).family); // turn / horns / flag cues
   return mv;
 }
 function render() {
@@ -98,6 +99,7 @@ function render() {
   if (st.cur === 0) chips.push('<span class="chip">Opening set</span>');
   else {
     chips.push(`<span class="chip">${set.counts} counts from set ${esc(sets[st.cur - 1].name)}</span>`);
+    for (const t of mv.looks) chips.push(`<span class="chip look">${esc(t)}</span>`);
     if (mv.dist < 0.01) chips.push('<span class="chip hold">HOLD</span>');
     else {
       if (mv.timing) chips.push(`<span class="chip hold">⏱ ${mv.timing}</span>`);
@@ -118,6 +120,7 @@ function render() {
     $('nextInfo').innerHTML = nm.dist < 0.01
       ? `Next: <strong>hold ${n.counts}</strong> into set ${esc(n.name)}`
       : `Next: <strong>${nm.timing || `${n.counts} counts`}</strong> to set ${esc(n.name)} · <strong>${nm.tech.label}</strong> · ${nm.label}${nm.big ? ' ⚠' : ''}`;
+    if (nm.looks.length) $('nextInfo').innerHTML += ` · ${nm.looks.map(esc).join(' · ')}`;
   } else $('nextInfo').textContent = 'Last set of the show.';
   $('prevSet').disabled = st.cur === 0; $('nextSet').disabled = st.cur === sets.length - 1;
   renderSheet(); renderNear(); updateClock(); draw();
@@ -127,7 +130,8 @@ function renderSheet() {
   $('sheetTitle').textContent = `${p.label} · ${sectionByKey(p.section).name} — ${st.show.title}`;
   $('sheetBody').innerHTML = sets.map((s, i) => {
     const q = s.pos[st.me], mv = myMove(i);
-    const step = !mv ? '' : mv.dist < 0.01 ? '<td class="hold">Hold</td>' : `<td class="${mv.big ? 'big' : ''}">${mv.label}<br><span class="tech-s">${mv.timing ? mv.timing + ' · ' : ''}${mv.tech.label}</span></td>`;
+    const cues = mv && mv.looks.length ? mv.looks.map(t => `<br><span class="tech-s look-t">${esc(t)}</span>`).join('') : '';
+    const step = !mv ? '' : mv.dist < 0.01 ? `<td class="hold">Hold${cues}</td>` : `<td class="${mv.big ? 'big' : ''}">${mv.label}<br><span class="tech-s">${mv.timing ? mv.timing + ' · ' : ''}${mv.tech.label}</span>${cues}</td>`;
     return `<tr class="${i === st.cur ? 'cur' : ''}"><td>${esc(s.name)}</td><td>${i ? s.counts : '—'}</td><td>${esc(describeX(q.x))}</td><td>${esc(describeY(q.y, st.show.field))}</td>${step || '<td></td>'}</tr>`;
   }).join('');
 }

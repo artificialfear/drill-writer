@@ -81,7 +81,7 @@
         <button data-act="reverse" title="Reverse order: swap dots end-to-end">Rev</button>
         <button data-act="prevSet" title="Copy these performers' spots from the previous set">← Prev</button>
       </span>
-      <span class="sb-group"><button id="sbTiming" title="Hold before or after the move into this set (e.g. hold 4, then move 12)">⏱ Timing</button></span>
+      <span class="sb-group"><button id="sbTiming" title="Hold before or after the move into this set (e.g. hold 4, then move 12)">⏱ Timing</button><button id="sbLook" title="Facing, horns up/down and flag position at this set">↻ Look</button></span>
       <span class="sb-group sb-one">
         <button id="sbDrop" title="This student quit: remove their dot and close up their forms">Drop…</button>
         <button id="sbPreview" title="See this student's phone view">Preview</button>
@@ -94,6 +94,19 @@
       <label>Arrive early, hold the last <input id="tmPost" type="number" min="0" value="0"> counts</label>
       <p id="tmHint" class="help"></p>
       <div class="row"><button id="tmApply" class="primary">Apply</button><button id="tmClear">Clear timing</button></div>
+    </div>
+    <div id="lookPop" class="timing-pop look-pop" hidden>
+      <div class="tm-head"><strong>Look at this set</strong><button id="lkClose" aria-label="Close">✕</button></div>
+      <p id="lkTitle" class="help"></p>
+      <div class="lk-row"><span class="lk-name">Facing</span>
+        <select id="lkFace"></select><span class="lk-at">on count <input id="lkFaceAt" type="number" min="1"></span></div>
+      <div class="lk-row" id="lkHornsRow"><span class="lk-name" id="lkHornsName">Horns</span>
+        <select id="lkHorns"><option value="">— no change —</option><option value="up">Up</option><option value="down">Down</option></select><span class="lk-at">on count <input id="lkHornsAt" type="number" min="1"></span></div>
+      <div class="lk-row" id="lkFlagRow"><span class="lk-name">Flag</span>
+        <select id="lkFlag"></select><span class="lk-at">on count <input id="lkFlagAt" type="number" min="1"></span></div>
+      <p id="lkNow" class="help"></p>
+      <p class="help">Changes carry forward to later sets until you change them again. The count is when it happens in the move into this set — leave it at the last count to do it on arrival.</p>
+      <div class="row"><button id="lkApply" class="primary">Apply</button><button id="lkClear">Clear changes at this set</button></div>
     </div>
     <div id="quickSel" class="quick-sel" hidden><span class="help">Select:</span></div>
 

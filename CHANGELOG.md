@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.21.0 — 2026-11-10
+- **Facings, horns up/down, and flag work.** Select students in Write mode and press **↻ Look** in the selection bar to set what changes at the current set:
+  - **Facing:** front, backfield, Side 1, Side 2, or back to their section's usual facing.
+  - **Horns:** up or down. For battery the same control is **sticks out / in**.
+  - **Flag** (color guard): attention, right or left shoulder, front present, right or left 45° angle, flat front, flat overhead, spinning (drop spins), or no flag.
+  - Each change can happen on a chosen count of the move into that set. It defaults to the last count, on arrival.
+  - Changes carry forward to later sets until changed again. "Clear changes at this set" removes them.
+- **Marching technique follows the facing.** Winds facing backfield and moving toward the front do a backward march. Moving sideways while facing backfield is a slide (left or right, from the marcher's point of view). Battery and bass drums with a set facing crab or march from that facing. Labels say so, e.g. "Slide right (facing backfield)".
+- **3D shows it all.**
+  - Marchers turn on the count.
+  - Horns snap down in front of the body: brass bells point down, the flute drops along the right side, clarinets and saxes lower. Snare and tenor sticks go in, bass mallets hang down, cymbal plates drop to the sides.
+  - Guard members move between flag positions with rigged arms; the spinning position does one drop spin every 2 counts.
+- **2D:** dots with a set facing get a small tick pointing their way, and horns-down / sticks-in dots get a dark center.
+- **Dot tab, student phone card, and dot sheet** list the cues for each move, e.g. "Horns down on count 8", "Turn to face backfield on count 24 (arriving)", "Flag: right shoulder on count 16".
+- Dropping a student removes their looks. Auto-fix swaps hand each look over with the path (the student takes on the facing and horns of the dots they inherit).
+
 ## 0.20.1 — 2026-11-08
 - Flutes are real length now (about 26½″, up from about 15″), angled slightly down, with a lip plate and keys. The left hand sits a few inches down the flute from the lip plate instead of at the face, and the right hand sits on the lower keys. Piccolos get the same treatment at real piccolo length (about 12½″).
 

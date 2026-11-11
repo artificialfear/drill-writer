@@ -2,7 +2,8 @@
 import {
   FIELD_DEPTH, GOAL_X, END_X, HASH_TYPES, refLines, snapPt, snapX, describeX, describeY, stepSize,
   SECTIONS, sectionByKey, PROP_KINDS, uid, newShow, normalizeShow, sampleShow,
-  setStarts, totalCounts, locate, positionsAt, moveStep, moveTiming, timingText
+  setStarts, totalCounts, locate, positionsAt, moveStep, moveTiming, timingText,
+  lookAt, lookChanges, lookFrame, lookText, moveFacing, setLook, hasLooks, FACINGS, FLAGS, facingByKey
 } from './model.js';
 import { planDrop, applyDrop, planAdd, applyAdd } from './drop.js';
 import { technique } from './technique.js';
@@ -228,6 +229,7 @@ function draw() {
   // performers
   const r = Math.max(3.5, 0.75 * s);
   const nextSt = state.show.sets[Math.min(snap.i + 1, show.sets.length - 1)];
+  const looks = hasLooks(show);
   for (const p of show.performers) {
     const q = snap.pos[p.id];
     const sec = sectionByKey(p.section);
@@ -235,6 +237,17 @@ function draw() {
     shapePath(sec.family, X, Y, r);
     ctx.fillStyle = sec.color; ctx.fill();
     ctx.lineWidth = 1; ctx.strokeStyle = ink; ctx.globalAlpha = 0.6; ctx.stroke(); ctx.globalAlpha = 1;
+    if (looks) { // facing tick (only when the drill sets a facing) + hollow centre for horns down / sticks in
+      const lf = lookFrame(show, snap.i, snap.frac, p.id), fk = lf.face.w >= 0.5 ? lf.face.b : lf.face.a;
+      const yaw = facingByKey(fk).yaw;
+      if (yaw != null) {
+        ctx.beginPath(); ctx.moveTo(X, Y); ctx.lineTo(sx(q.x + 1.25 * Math.sin(yaw)), sy(q.y - 1.25 * Math.cos(yaw)));
+        ctx.strokeStyle = ink; ctx.lineWidth = Math.max(1.5, 0.18 * s); ctx.stroke();
+      }
+      if ((lf.horns.w >= 0.5 ? lf.horns.b : lf.horns.a) === 'down' && (sec.family === 'wind' || sec.family === 'battery')) {
+        ctx.beginPath(); ctx.arc(X, Y, r * 0.42, 0, Math.PI * 2); ctx.fillStyle = ink; ctx.globalAlpha = 0.55; ctx.fill(); ctx.globalAlpha = 1;
+      }
+    }
     // step-size warning ring
     let big = false;
     if (editing && prev) big = moveStep(show, state.cur, p.id).big && !isOkBig(show, state.cur, p.id);
@@ -778,7 +791,7 @@ function renderDotInfo() {
     const ss = i ? moveStep(state.show, i, p.id) : null, tt = timingText(ss);
     rows += `<tr class="${i === state.cur ? 'current' : ''}"><td>${escapeHtml(st.name)}</td><td>${i ? st.counts : '—'}${tt ? `<br><span class="help">${tt}</span>` : ''}</td>
       <td>${escapeHtml(describeX(q.x))}</td><td>${escapeHtml(describeY(q.y, state.show.field))}</td>
-      <td class="${ss && ss.big ? 'big' : ''}">${ss ? (ss.dist < 0.01 ? 'Hold' : `${ss.label}<br><span class="help">${technique(sec.family, state.show.sets[i - 1].pos[p.id], q, sec.key).label}</span>`) : ''}</td></tr>`;
+      <td class="${ss && ss.big ? 'big' : ''}">${ss ? (ss.dist < 0.01 ? 'Hold' : `${ss.label}<br><span class="help">${technique(sec.family, state.show.sets[i - 1].pos[p.id], q, sec.key, moveFacing(state.show, i, p.id)).label}</span>`) : ''}${i ? lookText(state.show, i, p.id, sec.family).map(t => `<br><span class="help look-t">${escapeHtml(t)}</span>`).join('') : ''}</td></tr>`;
   });
   box.innerHTML = `<h3 style="margin:0 0 6px">${escapeHtml(p.label)} <span class="help">${sec.name}</span></h3>
     <table class="dot-table"><thead><tr><th>Set</th><th>Cts</th><th>Side to side</th><th>Front to back</th><th>Step</th></tr></thead><tbody>${rows}</tbody></table>
@@ -1466,6 +1479,65 @@ function applyTiming(clear) {
   if (big) toast(`${big} of them now need a step bigger than 6 to 5 — fewer counts to cover the same distance.`);
 }
 
+// ---------------- Look: facing, horns up/down, flag position at the current set ----------------
+function openLook() {
+  const ids = selIds(); if (!ids.length) return;
+  ensureAtSet();
+  $('timingPop').hidden = true;
+  const i = state.cur, st = curSet(), show = state.show;
+  const fams = new Set(ids.map(id => sectionByKey((show.performers.find(p => p.id === id) || {}).section).family));
+  const first = ids.length === 1 ? (show.performers.find(p => p.id === ids[0]) || {}).label : `${ids.length} selected`;
+  $('lkTitle').textContent = i === 0 ? `Set ${st.name} (the opening set) · ${first}` : `Set ${st.name} · move into it is ${st.counts} counts · ${first}`;
+  $('lkFace').innerHTML = '<option value="">— no change —</option>' + FACINGS.map(f => `<option value="${f.key}">${f.name}</option>`).join('');
+  $('lkFlag').innerHTML = '<option value="">— no change —</option>' + FLAGS.map(f => `<option value="${f.key}">${f.name}</option>`).join('');
+  // horns only matter for winds/battery, flags only for the guard
+  $('lkHornsRow').hidden = ![...fams].some(f => f === 'wind' || f === 'battery');
+  $('lkHornsName').textContent = [...fams].every(f => f === 'battery') ? 'Sticks' : 'Horns';
+  $('lkHorns').options[1].text = [...fams].every(f => f === 'battery') ? 'Out (playing)' : 'Up';
+  $('lkHorns').options[2].text = [...fams].every(f => f === 'battery') ? 'In (at rest)' : 'Down';
+  $('lkFlagRow').hidden = !fams.has('guard');
+  // show what's set at this set for the first selected student (if everyone matches)
+  const cur = id => (st.look || {})[id] || {};
+  for (const k of ['face', 'horns', 'flag']) {
+    const vals = new Set(ids.map(id => cur(id)[k] || ''));
+    $('lk' + k[0].toUpperCase() + k.slice(1)).value = vals.size === 1 ? [...vals][0] : '';
+    const at = cur(ids[0])[k + 'At'];
+    const inp = $('lk' + k[0].toUpperCase() + k.slice(1) + 'At');
+    inp.value = at || st.counts || ''; inp.max = st.counts || 1;
+    inp.parentElement.hidden = i === 0 || !st.counts;
+  }
+  // what they look like right now
+  const lk = lookAt(show, i, ids[0]);
+  const fam = sectionByKey((show.performers.find(p => p.id === ids[0]) || {}).section).family;
+  const bits = [`facing ${facingByKey(lk.face).short}`];
+  if (fam === 'wind') bits.push(`horns ${lk.horns}`);
+  if (fam === 'battery') bits.push(`sticks ${lk.horns === 'up' ? 'out' : 'in'}`);
+  if (fam === 'guard') bits.push(`flag: ${FLAGS.find(f => f.key === lk.flag).name.toLowerCase()}`);
+  $('lkNow').textContent = `${ids.length > 1 ? 'First selected is' : 'Right now:'} ${bits.join(', ')}.`;
+  $('lookPop').hidden = false;
+}
+function applyLook(clear) {
+  const ids = selIds(), i = state.cur, st = curSet(), c = st.counts || 0;
+  pushUndo();
+  if (clear) setLook(state.show, i, ids, { face: null, horns: null, flag: null });
+  else {
+    const at = k => { const v = Math.round(+$(k).value || c); return !c || v >= c ? null : Math.max(1, v); }; // last count = on arrival (stored as default)
+    const patch = {};
+    const face = $('lkFace').value, horns = $('lkHorns').value, flag = $('lkFlag').value;
+    patch.face = face || null; patch.faceAt = face ? at('lkFaceAt') : null;
+    if (!$('lkHornsRow').hidden) { patch.horns = horns || null; patch.hornsAt = horns ? at('lkHornsAt') : null; }
+    if (!$('lkFlagRow').hidden) {
+      // the flag setting only applies to guard members in the selection
+      const guards = ids.filter(id => sectionByKey((state.show.performers.find(p => p.id === id) || {}).section).family === 'guard');
+      setLook(state.show, i, guards, { flag: flag || null, flagAt: flag ? at('lkFlagAt') : null });
+    }
+    setLook(state.show, i, ids, patch);
+  }
+  $('lookPop').hidden = true;
+  changed();
+  toast(clear ? 'Cleared the look changes at this set.' : 'Look updated — it carries forward until you change it again.');
+}
+
 function updateSelBar() {
   const bar = $('selBar'), qs = $('quickSel');
   if (!bar) return;
@@ -1473,7 +1545,7 @@ function updateSelBar() {
   const busy = state.appMode !== 'write' || state.mode === '3d' || state.playing || dropLocked() || (g && ['drag', 'marquee', 'line', 'pan', 'pinch'].includes(g.kind));
   const ids = selIds();
   qs.hidden = state.appMode !== 'write' || state.mode === '3d' || state.playing || !!ids.length || !state.show.performers.length || dropLocked();
-  if (busy || !ids.length) { bar.hidden = true; $('timingPop').hidden = true; return; }
+  if (busy || !ids.length) { bar.hidden = true; $('timingPop').hidden = true; $('lookPop').hidden = true; return; }
   bar.hidden = false;
   $('selCount').textContent = ids.length === 1 ? (state.show.performers.find(p => p.id === ids[0]) || {}).label : `${ids.length} selected`;
   bar.querySelector('.sb-one').hidden = ids.length !== 1;
@@ -1891,11 +1963,15 @@ function init() {
   $('btnPlay').onclick = () => state.playing ? pause() : play();
   $('btnStop').onclick = stopPlayback;
   $('fixAll').onclick = () => startFix(null);
-  $('sbTiming').onclick = () => $('timingPop').hidden ? openTiming() : ($('timingPop').hidden = true);
+  $('sbTiming').onclick = () => { $('lookPop').hidden = true; $('timingPop').hidden ? openTiming() : ($('timingPop').hidden = true); };
   $('tmPre').oninput = updateTimingHint; $('tmPost').oninput = updateTimingHint;
   $('tmApply').onclick = () => applyTiming(false);
   $('tmClear').onclick = () => applyTiming(true);
   $('tmClose').onclick = () => { $('timingPop').hidden = true; };
+  $('sbLook').onclick = () => $('lookPop').hidden ? openLook() : ($('lookPop').hidden = true);
+  $('lkClose').onclick = () => { $('lookPop').hidden = true; };
+  $('lkApply').onclick = () => applyLook(false);
+  $('lkClear').onclick = () => applyLook(true);
   $('btnPrevSet').onclick = () => goToSet(atSet() ? state.cur - 1 : state.cur);
   $('btnNextSet').onclick = () => goToSet(state.cur + 1);
   $('scrub').oninput = ev => {

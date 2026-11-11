@@ -215,3 +215,7 @@ dialog::backdrop { background: rgba(0,0,0,.45); }
 
 /* first-person "Eyes" view: zoom and point-of-view buttons don't apply */
 .stage.eyes .pov-btns, .stage.eyes .zoom-btns { display: none; }
+
+/* facing / horns / flag cues */
+.chip.look { background: #e4f4f4; color: #0f6466; border-color: #9fd6d6; }
+.look-t { color: #0f6466 !important; font-weight: 600; }

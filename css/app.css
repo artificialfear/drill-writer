@@ -276,3 +276,12 @@ body[data-mode="students"] .students-main { display: grid; grid-template-columns
 .tm-head { display: flex; justify-content: space-between; align-items: center; }
 .tm-head button { min-height: 26px; padding: 0 8px; }
 .help.bad { color: var(--warn); }
+
+/* facing / horns / flag cues in the Dot tab */
+.look-t { color: #0f7f82 !important; font-weight: 600; }
+.look-pop { width: 340px; }
+.lk-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; }
+.lk-row[hidden], .lk-at[hidden] { display: none; }
+.lk-name { width: 52px; font-weight: 600; }
+.lk-row select { flex: 1; min-width: 130px; }
+.lk-at input { width: 52px; }

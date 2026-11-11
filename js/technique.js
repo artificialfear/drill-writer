@@ -20,13 +20,39 @@ export function legsFor(theta, facing) {
   return { legs: 'crab', rel };
 }
 
-export function technique(family, a, b, section) {
+const FACE_NAME = y => { // nearest named facing for a yaw
+  const d = ((y % (2 * Math.PI)) + 3 * Math.PI) % (2 * Math.PI) - Math.PI; // -PI..PI
+  const a = Math.abs(d) * DEG;
+  return a < 45 ? 'the front' : a > 135 ? 'backfield' : d > 0 ? 'Side 2' : 'Side 1';
+};
+
+// facing (optional): a yaw the marcher's upper body is set to face for this move (from the drill's Look settings).
+// null/undefined = the section's usual facing (horns/drums to the box, guard toward travel, bass drums to the 50).
+export function technique(family, a, b, section, facing) {
   const dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
-  if (dist < 0.01 || family === 'pit') return { kind: 'hold', label: 'Hold', hipYaw: 0, bodyYaw: 0, legs: 'still' };
+  const set = facing != null && family !== 'pit';
+  if (dist < 0.01 || family === 'pit') return { kind: 'hold', label: set && Math.abs(facing) > 0.01 ? `Hold (facing ${FACE_NAME(facing)})` : 'Hold', hipYaw: 0, bodyYaw: set ? facing : 0, legs: 'still' };
   const theta = Math.atan2(dx, -dy);                 // radians
   const deg = theta * DEG, abs = Math.abs(deg);
   const side = dx > 0 ? 'left' : 'right';
   const sideName = dx > 0 ? 'Side 2' : 'Side 1';
+
+  if (set) {
+    // the body faces where the drill says; the legs work out how to travel from there
+    const { legs, rel } = legsFor(theta, facing);
+    const ra = Math.abs(rel) * DEG, sd = rel > 0 ? 'left' : 'right', tail = ` (facing ${FACE_NAME(facing)})`;
+    if (family === 'battery' || section === 'bass') {
+      const label = legs === 'forward' ? 'Forward march' : legs === 'backward' ? 'Backward march' : `Crab step ${sd}`;
+      return { kind: legs === 'crab' ? 'crab' : legs, label: label + tail, hipYaw: 0, bodyYaw: facing, legs };
+    }
+    if (ra <= 100) {
+      const label = ra < 20 ? 'Forward march' : ra >= 70 ? `Slide ${sd}` : `Forward slide ${sd}`;
+      return { kind: ra < 20 ? 'forward' : 'slide', label: label + tail, hipYaw: ra < 20 ? 0 : rel, bodyYaw: facing, legs: 'forward' };
+    }
+    const back = rel > 0 ? rel - Math.PI : rel + Math.PI;
+    const label = ra > 160 ? 'Backward march' : `Backward slide ${sd}`;
+    return { kind: ra > 160 ? 'backward' : 'backslide', label: label + tail, hipYaw: ra > 160 ? 0 : back, bodyYaw: facing, legs: 'backward' };
+  }
 
   if (family === 'guard' || family === 'dm') {
     // no horn to keep to the box: the whole body turns and marches toward the next spot

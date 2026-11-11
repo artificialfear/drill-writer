@@ -3,7 +3,7 @@
 // so the move into that set has the smallest possible largest step and no crossings.
 // Swapping happens from that set onward: a student takes over the whole rest of the other student's
 // path, so every later move looks exactly the same — only the move into the fixed set changes.
-import { moveStep, moveTiming } from './model.js';
+import { moveStep, moveTiming, lookAt } from './model.js';
 import { collisionsInto } from './checks.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -87,6 +87,10 @@ function optimizeGroup(show, i, ids) {
 export function applySwap(show, i, perm) {
   const who = Object.keys(perm); if (!who.length) return;
   const inv = {}; for (const w of who) inv[perm[w]] = w;
+  // looks (facing / horns / flag) carry forward from earlier sets, so first pin down what each PATH looks like
+  // at set i and what each student looked like just before — the student takes over the path's look from here on
+  const pathLook = {}, wasLook = {};
+  for (const w of who) { pathLook[w] = lookAt(show, i, perm[w]); wasLook[w] = i > 0 ? lookAt(show, i - 1, w) : null; }
   for (let j = i; j < show.sets.length; j++) {
     const st = show.sets[j], old = {}, oldT = {};
     for (const w of who) { old[w] = st.pos[w] && { ...st.pos[w] }; oldT[w] = st.timing && st.timing[w]; }
@@ -95,6 +99,19 @@ export function applySwap(show, i, perm) {
       // later moves: timing belongs to the path, so it goes with it; the fixed move itself starts fresh
       const t = j > i ? oldT[perm[w]] : null;
       if (t) st.timing[w] = { ...t }; else delete st.timing[w];
+    }
+    if (st.look) {
+      const oldL = {}; for (const w of who) oldL[w] = st.look[w];
+      for (const w of who) { if (oldL[perm[w]]) st.look[w] = { ...oldL[perm[w]] }; else delete st.look[w]; }
+    }
+    if (j === i) for (const w of who) { // make the hand-over explicit at set i wherever it differs from before
+      const l = { ...((st.look || {})[w] || {}) };
+      for (const k of ['face', 'horns', 'flag']) {
+        const was = wasLook[w] ? wasLook[w][k] : null;
+        if (pathLook[w][k] !== was && (was !== null || l[k])) l[k] = pathLook[w][k]; else if (pathLook[w][k] === was) { delete l[k]; delete l[k + 'At']; }
+      }
+      st.look = st.look || {};
+      if (Object.keys(l).length) st.look[w] = l; else delete st.look[w];
     }
     st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.map(id => inv[id] ?? id) }));
   }

@@ -229,6 +229,23 @@ with sync_playwright() as p:
     check('Dot tab shows the hold', 'Hold 4, then 20' in page.inner_text('#dotInfo'))
     page.click('.tab[data-tab=sets]'); page.keyboard.press('Control+z')
 
+    # Look: facing + horns down on the move into set 2, then it carries forward to set 3
+    page.click('#btnStop'); page.locator('#tlTrack .tl-block').nth(1).click(); page.wait_for_timeout(100)
+    page.evaluate(f"__dw.sel = new Set(['{tid}'])"); page.evaluate("document.querySelector('#field').dispatchEvent(new Event('pointerleave'))")
+    page.click('#sbLook'); page.wait_for_selector('#lookPop:not([hidden])')
+    check('Look panel hides the flag row for a trumpet', not page.is_visible('#lkFlagRow'))
+    page.select_option('#lkFace', 'back'); page.select_option('#lkHorns', 'down'); page.fill('#lkHornsAt', '8')
+    page.screenshot(path=f'{SHOTS}/22-look-panel.png')
+    page.click('#lkApply')
+    check('look saved at set 2 (horns on count 8, facing on arrival)', page.evaluate(f"JSON.stringify(__dw.show.sets[1].look['{tid}'])") == '{"face":"back","horns":"down","hornsAt":8}')
+    carried = page.evaluate(f"import('./js/model.js').then(m => m.lookAt(__dw.show, 2, '{tid}'))")
+    check('the look carries forward to set 3', carried['face'] == 'back' and carried['horns'] == 'down')
+    page.click('.tab[data-tab=info]')
+    dot = page.inner_text('#dotInfo')
+    check('Dot tab lists the cues', 'Horns down on count 8' in dot and 'Turn to face backfield' in dot)
+    page.click('.tab[data-tab=sets]'); page.keyboard.press('Control+z')
+    check('undo removes the look', page.evaluate(f"!(__dw.show.sets[1].look || {{}})['{tid}']"))
+
     # auto-fix: six trumpets whose paths all cross
     import tempfile
     cross = {'app': 'drill-writer', 'version': 1, 'title': 'Cross test', 'field': {'hash': 'hs'}, 'performers': [], 'props': [], 'tempo': {'bpm': 144},

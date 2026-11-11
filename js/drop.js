@@ -157,6 +157,7 @@ export function applyDrop(show, pid, plans, choices, stepSize, setName = st => s
     if (choices[i] === 'hole' && st.pos[pid]) (st.holes = st.holes || []).push({ x: st.pos[pid].x, y: st.pos[pid].y, was: droppedLabel });
     delete st.pos[pid];
     if (st.timing) delete st.timing[pid];
+    if (st.look) delete st.look[pid];
     st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.filter(id => id !== pid) })).filter(f => f.ids.length > 1);
   });
   const dropped = show.performers.find(p => p.id === pid);
