@@ -11,6 +11,7 @@ import { collisionsInto } from './checks.js';
 import { proposeFix, proposeAll, applyPlan, swapReport, okKeyX, okKeyBig, isOkX, isOkBig } from './fix.js';
 import { css, drawField as drawFieldShared, shapePath as shapePathShared, propCorners } from './fieldDraw.js';
 import { createRehearsal, COUNTOFF_PRESETS, SOUNDS, DEFAULT_SETTINGS } from './rehearse.js';
+import { addSnapshot, listSnapshots, getSnapshot, askPersistent } from './backup.js';
 
 const $ = id => document.getElementById(id);
 const canvas = $('field');
@@ -49,15 +50,139 @@ const atSet = () => !state.playing && Math.abs(state.count - setStarts(state.sho
 const r2 = v => Math.round(v * 100) / 100;
 
 // ---------------- Persistence & undo ----------------
-let saveTimer = null;
+// Three layers keep a show safe:
+//  1. autosave: the current show, written to this browser's storage a moment after every change
+//  2. automatic copies (backup.js): a history in the browser's database — every few minutes while editing,
+//     and right before anything big (New, Open, Drop, Fix all, Delete set, Restore…)
+//  3. the downloaded file (Save / Ctrl+S) — the only copy that survives cleared browser data or a new computer,
+//     so the app reminds you when it's been a while
+const META_KEY = 'drillwriter.backup.meta';
+let meta = { lastDownload: 0, edits: 0, snoozeUntil: 0 };
+try { meta = { ...meta, ...JSON.parse(localStorage.getItem(META_KEY) || '{}') }; } catch (e) {}
+const saveMeta = () => { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) {} };
+const save = { ok: true, at: 0, pending: false, conflict: false, copies: true, persisted: null };
+let saveTimer = null, lastCopyAt = 0;
+const COPY_EVERY = 5 * 60e3;
+
+function writeNow() {
+  clearTimeout(saveTimer); saveTimer = null;
+  if (save.conflict) { save.pending = false; renderSaveStatus(); return; } // don't overwrite another tab's newer work
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state.show)); save.ok = true; save.at = Date.now(); }
+  catch (e) { save.ok = false; checkpoint('Autosave (browser storage refused the save)'); }
+  save.pending = false;
+  if (Date.now() - lastCopyAt > COPY_EVERY) checkpoint('While editing');
+  renderSaveStatus();
+}
 function autosave() {
+  save.pending = true; renderSaveStatus();
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(state.show)); } catch (e) { /* storage may be blocked */ }
-  }, 300);
+  saveTimer = setTimeout(writeNow, 300);
+}
+// keep an automatic copy of the show as it is right now (before something big, or every few minutes)
+function checkpoint(reason) {
+  if (!state.show || !state.show.performers.length) return;
+  lastCopyAt = Date.now();
+  addSnapshot(state.show, reason).then(() => { save.copies = true; }).catch(() => { save.copies = false; renderSaveStatus(); });
+}
+const ago = t => {
+  if (!t) return 'never';
+  const m = Math.round((Date.now() - t) / 60e3);
+  if (m < 1) return 'just now'; if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60); if (h < 24) return `${h} hour${h > 1 ? 's' : ''} ago`;
+  const d = Math.round(h / 24); return `${d} day${d > 1 ? 's' : ''} ago`;
+};
+const when = t => new Date(t).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+function renderSaveStatus() {
+  const el = $('saveStatus'); if (!el) return;
+  let text, cls, tip;
+  if (save.conflict) { text = '⚠ Changed in another tab'; cls = 'bad'; tip = 'This show was changed in another tab or window. Choose which version to keep.'; }
+  else if (!save.ok) { text = '⚠ Not saved'; cls = 'bad'; tip = 'This browser refused to save the show (storage full or blocked). Download a file now to keep your work.'; }
+  else if (save.pending) { text = 'Saving…'; cls = ''; tip = 'Saving in this browser…'; }
+  else { text = '✓ Saved'; cls = 'ok'; tip = `Saved in this browser ${save.at ? 'at ' + new Date(save.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}. Last file download: ${ago(meta.lastDownload)}. Click for backups.`; }
+  el.textContent = text; el.className = 'save-status ' + cls; el.title = tip;
+}
+// "download a copy" reminder: after a good amount of work with no file downloaded in 3+ days
+function maybeNag() {
+  const bar = $('backupNag'); if (!bar || save.conflict) return;
+  const due = state.show.performers.length && meta.edits >= 20 && Date.now() - meta.lastDownload > 3 * 864e5 && Date.now() > meta.snoozeUntil;
+  if (!due) { if (bar.dataset.kind === 'nag') bar.hidden = true; return; }
+  bar.dataset.kind = 'nag';
+  $('nagText').textContent = meta.lastDownload
+    ? `It's been ${ago(meta.lastDownload).replace(' ago', '')} since you downloaded a copy of this show. The copy in this browser can be lost if browser data is cleared.`
+    : 'You haven\'t downloaded a copy of this show yet. The copy in this browser can be lost if browser data is cleared.';
+  $('nagGo').textContent = 'Download a backup file'; $('nagLater').textContent = 'Not now';
+  bar.hidden = false;
+}
+function downloadShow(show = state.show, name) {
+  const blob = new Blob([JSON.stringify(show, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.download = name || `${(show.title || 'show').replace(/[^\w\- ]+/g, '').trim() || 'show'} ${stamp}.drill.json`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  if (show === state.show) {
+    meta.lastDownload = Date.now(); meta.edits = 0; saveMeta();
+    if ($('backupNag').dataset.kind === 'nag') $('backupNag').hidden = true;
+    renderSaveStatus(); toast('Downloaded — keep it somewhere safe (Google Drive, email it to yourself…).');
+  }
+}
+// Another tab or window saved a different version of the show: stop autosaving here until a choice is made.
+function otherTabChanged(newValue) {
+  if (!newValue || newValue === JSON.stringify(state.show)) return;
+  save.conflict = true; renderSaveStatus();
+  const bar = $('backupNag'); bar.dataset.kind = 'conflict';
+  $('nagText').textContent = 'This show was just changed in another tab or window. Editing here would overwrite those changes.';
+  $('nagGo').textContent = 'Load the other version'; $('nagLater').textContent = 'Keep this version';
+  bar.hidden = false;
+  bar.dataset.other = newValue;
+}
+function nagGo() {
+  const bar = $('backupNag');
+  if (bar.dataset.kind === 'conflict') {
+    let other = null; try { other = JSON.parse(bar.dataset.other); } catch (e) {}
+    save.conflict = false; bar.hidden = true;
+    if (other) { checkpoint('Before loading the version from another tab'); pushUndo(); loadShow(other, true); toast('Loaded the other version. Undo brings this one back.'); }
+    return;
+  }
+  downloadShow();
+}
+function nagLater() {
+  const bar = $('backupNag');
+  if (bar.dataset.kind === 'conflict') { save.conflict = false; bar.hidden = true; writeNow(); toast('Kept this version.'); return; }
+  meta.snoozeUntil = Date.now() + 864e5; saveMeta(); bar.hidden = true;
+}
+
+// ---------------- Backups panel ----------------
+async function openBackups() {
+  $('backupDlg').hidden = false;
+  const body = $('bkList');
+  body.innerHTML = '<p class="help">Loading…</p>';
+  $('bkLast').textContent = `Last file download: ${ago(meta.lastDownload)}${meta.lastDownload ? ` (${when(meta.lastDownload)})` : ''}.`;
+  $('bkStorage').textContent = save.persisted === true ? 'This browser has agreed to keep Drill Writer\'s storage (it won\'t clear it on its own).'
+    : 'This browser may clear its storage on its own (for example Safari, if Drill Writer isn\'t opened for about a week) — another reason to download a file.';
+  let list = [];
+  try { list = await listSnapshots(); } catch (e) { body.innerHTML = '<p class="help bad">Automatic copies aren\'t available in this browser (private window?). Download files instead.</p>'; return; }
+  if (!list.length) { body.innerHTML = '<p class="help">No automatic copies yet — one is made every few minutes while you edit, and before anything big.</p>'; return; }
+  body.innerHTML = '<ul class="bk-list">' + list.map(s => `<li>
+      <div><strong>${when(s.at)}</strong> <span class="help">${ago(s.at)}</span><br>
+      <span class="help">${escapeHtml(s.reason)} · ${escapeHtml(s.title)} · ${s.sets} sets · ${s.performers} performers</span></div>
+      <span class="bk-btns"><button data-r="${s.id}">Restore</button><button data-d="${s.id}">Download</button></span></li>`).join('') + '</ul>';
+  body.querySelectorAll('button[data-r]').forEach(b => b.onclick = async () => {
+    const snap = await getSnapshot(+b.dataset.r); if (!snap) return;
+    if (!confirm(`Replace the show you're working on with the copy from ${when(snap.at)}?\n\nYour current show is kept as a copy first, and Undo brings it right back.`)) return;
+    checkpoint('Before restoring an older copy');
+    pushUndo(); loadShow(JSON.parse(snap.data), true);
+    $('backupDlg').hidden = true; toast(`Restored the copy from ${when(snap.at)}. Undo (Ctrl+Z) goes back.`);
+  });
+  body.querySelectorAll('button[data-d]').forEach(b => b.onclick = async () => {
+    const snap = await getSnapshot(+b.dataset.d); if (!snap) return;
+    const d = new Date(snap.at), stamp = `${d.toISOString().slice(0, 10)} ${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}`;
+    downloadShow(JSON.parse(snap.data), `${(snap.title || 'show').replace(/[^\w\- ]+/g, '').trim() || 'show'} (copy ${stamp}).drill.json`);
+  });
 }
 function snapshot() { return JSON.stringify({ show: state.show, cur: state.cur }); }
 function pushUndo() {
+  meta.edits++; saveMeta(); maybeNag(); // counts toward the "download a copy" reminder
   state.undo.push(snapshot());
   if (state.undo.length > 150) state.undo.shift();
   state.redo.length = 0;
@@ -874,6 +999,7 @@ function renderDrop() {
 }
 function applyDropNow() {
   const d = state.drop;
+  checkpoint(`Before dropping ${(state.show.performers.find(p => p.id === d.pid) || {}).label || 'a student'}`);
   pushUndo();
   d.report = applyDrop(state.show, d.pid, d.plans, d.choices, stepSize);
   state.sel = new Set(d.report.changed.map(c => c.id)); state.selProp = null;
@@ -1013,6 +1139,7 @@ function renderAdd() {
   });
   $('addApply').onclick = () => {
     if (state.show.performers.some(p => p.label === d.perf.label)) return toast(`${d.perf.label} is already taken — change the Drill ID.`);
+    checkpoint(`Before adding ${d.perf.label}`);
     pushUndo();
     d.report = applyAdd(state.show, { ...d.perf }, d.plans, d.choices, stepSize);
     state.sel = new Set([d.perf.id, ...d.report.changed.map(c => c.id)]); state.selProp = null;
@@ -1085,6 +1212,7 @@ function renumberSetNames() {
 function deleteSet() {
   if (state.show.sets.length < 2) return;
   if (!confirm(`Delete set ${curSet().name}? Everyone's spots for this set are removed.`)) return;
+  checkpoint(`Before deleting set ${curSet().name}`);
   pushUndo();
   state.show.sets.splice(state.cur, 1);
   state.show.sets[0].counts = 0;
@@ -1121,10 +1249,11 @@ function addPerformers(sectionKey, n) {
 function removeSelected() {
   const ids = selIds(); if (!ids.length) return;
   if (!confirm(`Remove ${ids.length} performer(s) from the whole show?`)) return;
+  checkpoint(`Before removing ${ids.length} performer${ids.length > 1 ? 's' : ''}`);
   pushUndo();
   state.show.performers = state.show.performers.filter(p => !state.sel.has(p.id));
   for (const st of state.show.sets) {
-    for (const id of ids) delete st.pos[id];
+    for (const id of ids) { delete st.pos[id]; if (st.timing) delete st.timing[id]; if (st.look) delete st.look[id]; }
     st.forms = (st.forms || []).map(f => ({ ...f, ids: f.ids.filter(id => !state.sel.has(id)) })).filter(f => f.ids.length > 1);
   }
   state.sel.clear();
@@ -1132,6 +1261,7 @@ function removeSelected() {
 }
 function renumber() {
   if (!confirm('Renumber every section 1, 2, 3… from Side 1 to Side 2 using the current set? Drill IDs will change.')) return;
+  checkpoint('Before renumbering');
   pushUndo();
   for (const sec of SECTIONS) {
     const ps = state.show.performers.filter(p => p.section === sec.key);
@@ -1287,6 +1417,7 @@ function renderFix() {
     </div>`;
   $('dropBody').querySelectorAll('.drop-sets li').forEach(li => li.onclick = () => { const pl = d.plans[+li.dataset.k]; zoomToPaths(pl.set, [...Object.keys(pl.perm), ...Object.keys(pl.timing || {})]); goToSet(pl.set); renderDrop(); });
   $('fixApply').onclick = () => {
+    checkpoint('Before an automatic fix');
     pushUndo();
     const report = swapReport(state.show, d.plans);
     for (const pl of d.plans) applyPlan(state.show, pl);
@@ -1898,28 +2029,37 @@ function init() {
   $('view3dBtn').onclick = () => setMode('3d');
   $('camSelect').onchange = ev => state.v3 && state.v3.setCamera(ev.target.value);
 
-  $('btnNew').onclick = () => { if (confirm('Start a new, empty show? Save this one first if you want to keep it.')) loadShow(newShow()); };
-  $('btnSample').onclick = () => { if (!state.show.performers.length || confirm('Replace the current show with the sample show?')) loadShow(sampleShow()); };
-  $('btnSave').onclick = () => {
-    const blob = new Blob([JSON.stringify(state.show, null, 1)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `${(state.show.title || 'show').replace(/[^\w\- ]+/g, '').trim() || 'show'}.drill.json`;
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  // replacing the whole show: keep a copy first, and keep Undo so Ctrl+Z brings the old show back
+  const replaceShow = (next, reason) => { checkpoint(reason); pushUndo(); loadShow(next, true); };
+  $('btnNew').onclick = () => {
+    if (!state.show.performers.length || confirm('Start a new, empty show?\n\nThis one is kept in Backups, and Undo brings it back.')) {
+      replaceShow(newShow(), 'Before starting a new show');
+      if (state.undo.length > 1) toast('New show. Undo (Ctrl+Z) brings the old one back.');
+    }
   };
+  $('btnSample').onclick = () => { if (!state.show.performers.length || confirm('Replace the current show with the sample show?\n\nThis one is kept in Backups, and Undo brings it back.')) replaceShow(sampleShow(), 'Before loading the sample show'); };
+  $('btnSave').onclick = () => downloadShow();
+  $('saveStatus').onclick = openBackups;
+  $('bkClose').onclick = () => { $('backupDlg').hidden = true; };
+  $('bkDownload').onclick = () => { downloadShow(); openBackups(); };
+  $('nagGo').onclick = nagGo; $('nagLater').onclick = nagLater;
+  // save right away if the tab is being closed or hidden
+  window.addEventListener('beforeunload', () => { if (saveTimer) writeNow(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) writeNow(); });
+  window.addEventListener('storage', e => { if (e.key === STORE_KEY) otherTabChanged(e.newValue); });
   $('btnOpen').onclick = () => $('fileInput').click();
   $('fileInput').onchange = async ev => {
     const f = ev.target.files[0]; if (!f) return;
     try {
       const data = JSON.parse(await f.text());
       if (data.app !== 'drill-writer') throw new Error('not a drill file');
-      loadShow(data); toast(`Opened “${state.show.title}”.`);
+      replaceShow(data, `Before opening “${data.title || 'a file'}”`); toast(`Opened “${state.show.title}”. Undo brings back the show you had.`);
     } catch (e) { toast("That file couldn't be opened as a Drill Writer show."); }
     ev.target.value = '';
   };
   $('showTitle').onchange = ev => { state.show.title = ev.target.value.trim() || 'Untitled Show'; autosave(); };
   $('hashSelect').onchange = ev => { pushUndo(); state.show.field.hash = ev.target.value; changed(); };
-  $('bpm').onchange = ev => { state.show.tempo.bpm = Math.max(40, Math.min(240, parseInt(ev.target.value, 10) || 144)); changed(); };
+  $('bpm').onchange = ev => { pushUndo(); state.show.tempo.bpm = Math.max(40, Math.min(240, parseInt(ev.target.value, 10) || 144)); changed(); };
   $('setNote').onchange = ev => { pushUndo(); curSet().note = ev.target.value; autosave(); };
 
   $('btnAddSet').onclick = addSet;
@@ -1987,6 +2127,7 @@ function init() {
   $('btnUndo').onclick = undo; $('btnRedo').onclick = redo;
 
   window.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); downloadShow(); return; }
     const tag = (e.target.tagName || '').toLowerCase();
     if (['input', 'textarea', 'select'].includes(tag)) return;
     const k = e.key, mod = e.ctrlKey || e.metaKey;
@@ -2017,6 +2158,10 @@ function init() {
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) {}
   loadShow(saved && saved.app === 'drill-writer' ? saved : newShow());
+  save.at = saved ? Date.now() : 0; save.pending = false; clearTimeout(saveTimer); saveTimer = null;
+  renderSaveStatus(); maybeNag();
+  checkpoint('Opened Drill Writer');
+  askPersistent().then(v => { save.persisted = v; });
   state.mode = '2d';
   state.appMode = 'write'; document.body.dataset.mode = 'write';
   setTool('select');

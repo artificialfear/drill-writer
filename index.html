@@ -11,6 +11,7 @@
 <header class="topbar">
   <div class="brand">Drill Writer</div>
   <input id="showTitle" class="title-input" aria-label="Show title" value="Untitled Show">
+  <button id="saveStatus" class="save-status ok" title="Saved in this browser. Click for backups.">✓ Saved</button>
   <nav class="modes" role="tablist" aria-label="Mode">
     <button id="modeWrite" class="on" data-mode="write" title="Write and edit drill">Write</button>
     <button id="modeRehearse" data-mode="rehearse" title="Run reps with count-off and click (R)">Rehearse</button>
@@ -28,8 +29,23 @@
     <button id="btnTheme" title="Toggle light/dark">◐</button>
     <input id="fileInput" type="file" accept=".json,application/json" hidden>
   </div>
+  <div id="backupNag" class="backup-nag" hidden>
+    <span id="nagText"></span>
+    <button id="nagGo" class="primary">Download a backup file</button><button id="nagLater">Not now</button>
+  </div>
 </header>
 
+<div id="backupDlg" class="bk-dlg" hidden>
+  <div class="bk-card" role="dialog" aria-label="Backups">
+    <div class="tm-head"><strong>Backups</strong><button id="bkClose" aria-label="Close">✕</button></div>
+    <p class="help">Your show saves itself in this browser as you work. That copy lives only in this browser on this computer — clearing browser data or switching computers loses it. <strong>A downloaded file is the copy you can always count on</strong>; keep it in Google Drive or email it to yourself.</p>
+    <div class="row"><button id="bkDownload" class="primary">Download backup file</button><span id="bkLast" class="help"></span></div>
+    <p id="bkStorage" class="help"></p>
+    <h4>Automatic copies</h4>
+    <p class="help">Made every few minutes while you edit and right before anything big (New, Open, Drop, Fix all, Delete set…). Older ones are thinned out to one per hour, then one per day for 60 days.</p>
+    <div id="bkList"></div>
+  </div>
+</div>
 <main class="layout">
   <nav class="toolbar" aria-label="Tools">
     <div class="tool-group">

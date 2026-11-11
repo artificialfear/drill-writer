@@ -285,3 +285,20 @@ body[data-mode="students"] .students-main { display: grid; grid-template-columns
 .lk-name { width: 52px; font-weight: 600; }
 .lk-row select { flex: 1; min-width: 130px; }
 .lk-at input { width: 52px; }
+
+/* save status + backups */
+.save-status { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: transparent; min-height: 26px; white-space: nowrap; }
+.save-status.ok { color: #2f8a4c; border-color: #9fd1ae; }
+.save-status.bad { color: #fff; background: #c0392b; border-color: #c0392b; font-weight: 600; }
+.backup-nag { flex-basis: 100%; margin: 0 -12px -8px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 12px; background: #fff4d6; color: #5c4400; border-bottom: 1px solid #ecd28a; font-size: 13px; }
+.backup-nag[data-kind="conflict"] { background: #fde2df; color: #7a1d12; border-color: #f0b2aa; }
+.backup-nag[hidden] { display: none; }
+.backup-nag span { flex: 1; min-width: 220px; }
+.bk-dlg { position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: 50; display: flex; align-items: flex-start; justify-content: center; padding: 60px 16px 16px; }
+.bk-dlg[hidden] { display: none; }
+.bk-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; width: min(620px, 100%); max-height: calc(100vh - 90px); overflow: auto; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+.bk-card h4 { margin: 14px 0 2px; }
+.bk-card .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.bk-list { list-style: none; padding: 0; margin: 6px 0 0; }
+.bk-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
+.bk-btns { display: flex; gap: 6px; flex-shrink: 0; }

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.22.0 — 2026-11-10
+- **Protecting work.**
+  - **Save status** in the header: ✓ Saved / Saving… / ⚠ Not saved (if the browser refuses to save) / ⚠ Changed in another tab. Click it to open **Backups**.
+  - **Automatic copies.** A history of the show is kept in the browser's database: every few minutes while editing, and right before anything big (New, Open, Sample, Drop, Add student, Fix, Delete set, Remove performers, Renumber, Restore, loading another tab's version). Identical copies aren't stored twice. Old copies are thinned to everything from the last 2 hours, then one per hour for 2 days, then one per day for 60 days.
+  - **Backups panel:** restore any copy (the current show is copied first, and Undo brings it back) or download it as a file.
+  - **Download reminder:** after 20+ changes with no file downloaded in 3+ days, a bar offers "Download a backup file". "Not now" snoozes it for a day. **Ctrl+S** downloads, and file names now include the date.
+  - **New / Open / Sample no longer wipe Undo.** Ctrl+Z brings back the show you had.
+  - **Two tabs editing the same show** no longer silently overwrite each other. The second tab's save shows a warning in the first, with "Load the other version" or "Keep this version".
+  - The show saves immediately when the tab is closed or hidden. The app also asks the browser to keep its storage rather than clear it on its own.
+- Fixes: changing the show tempo can now be undone. Removing performers also removes their timing and look entries.
+
 ## 0.21.0 — 2026-11-10
 - **Facings, horns up/down, and flag work.** Select students in Write mode and press **↻ Look** in the selection bar to set what changes at the current set:
   - **Facing:** front, backfield, Side 1, Side 2, or back to their section's usual facing.
