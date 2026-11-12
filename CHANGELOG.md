@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.23.2 — 2026-11-11
+- **Move the field while zoomed in, without Fit:**
+  - **Hold Space and drag.** Works in any tool. A quick tap of Space still plays and stops (it now acts on release).
+  - **Two-finger scroll on a trackpad** moves the field, and pinching zooms. A mouse wheel still zooms.
+  - **Arrow keys** move the view when nothing is selected (Shift = farther). With marchers selected they still nudge the dots.
+  - Right-drag, middle-drag, and the Pan tool (H) still work as before.
+  - The Select hint and the Fit button's tooltip now mention these.
+
 ## 0.23.1 — 2026-11-11
 - The row of section buttons (Flute, Clarinet, …) no longer covers the front of the field. It's now one small **Select a section ▴** button in the bottom-left corner. Clicking it opens the list as a pop-up menu above the button; it closes after a pick or a click on the field. Shift still adds to the selection.
 

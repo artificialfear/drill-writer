@@ -632,12 +632,12 @@ function nudge(dx, dy) {
 function evPos(e) { const r = canvas.getBoundingClientRect(); return { px: e.clientX - r.left, py: e.clientY - r.top }; }
 
 const toolHints = {
-  select: 'Click or drag a box to select · drag dots to move · arrow keys nudge 1 step (Shift = 4)',
+  select: 'Click or drag a box to select · drag dots to move · move the view: hold Space + drag, right-drag, or two-finger scroll',
   line: 'Drag to draw a line · selected performers fill it in order · Shift = any angle · Esc = cancel',
   arc: 'Click the start, click the end, then click where the arc should bulge · Esc = cancel',
   block: 'Click the FRONT-LEFT corner (Side 1 end of the front rank) · Esc = cancel',
   circle: 'Click the center of the circle · Esc = cancel',
-  pan: 'Drag to pan · scroll to zoom'
+  pan: 'Drag to move the view · scroll or pinch to zoom · tip: hold Space + drag works in any tool'
 };
 function setTool(t) {
   state.tool = t; state.arcPts = [];
@@ -707,7 +707,9 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
   const w = toWorld(px, py);
-  if (state.tool === 'pan' || e.button === 1 || e.button === 2 || state.appMode === 'rehearse') {
+  // move the view: Pan tool, middle/right-drag, or hold Space and drag (left-drag stays select / move)
+  if (state.space) state.space.panned = true;
+  if (state.tool === 'pan' || state.space || e.button === 1 || e.button === 2 || state.appMode === 'rehearse') {
     state.pointer = { kind: 'pan', px, py, ox: state.view.ox, oy: state.view.oy };
     canvas.style.cursor = 'grabbing';
     return;
@@ -793,7 +795,7 @@ function endPointer(e) {
   if (!g) return;
   if (g.kind === 'pinch') { if (pointers.size === 0) state.pointer = null; return; }
   state.pointer = null;
-  if (g.kind === 'pan') { canvas.style.cursor = state.tool === 'pan' ? 'grab' : ''; return; }
+  if (g.kind === 'pan') { canvas.style.cursor = state.tool === 'pan' || state.space ? 'grab' : ''; return; }
   if (g.kind === 'marquee') {
     const a = toWorld(Math.min(g.sx0, g.sx1), Math.max(g.sy0, g.sy1)), b = toWorld(Math.max(g.sx0, g.sx1), Math.min(g.sy0, g.sy1));
     if (Math.abs(g.sx1 - g.sx0) > 3 || Math.abs(g.sy1 - g.sy0) > 3) {
@@ -813,7 +815,19 @@ canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
 canvas.addEventListener('pointerleave', () => { if (!state.pointer) { state.hover = null; $('hudCoord').textContent = ''; draw(); } });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-canvas.addEventListener('wheel', e => { e.preventDefault(); const { px, py } = evPos(e); zoomAt(px, py, e.deltaY < 0 ? 1.15 : 1 / 1.15); }, { passive: false });
+// Wheel: a mouse wheel zooms; a trackpad's two-finger scroll moves the field and its pinch zooms
+// (browsers report a trackpad pinch as a wheel event with Ctrl held). Mouse wheels move in big whole notches;
+// once something looks like a trackpad, keep treating it as one for a moment so a fast swipe doesn't zoom.
+let lastPadAt = 0;
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const { px, py } = evPos(e);
+  if (e.ctrlKey) { zoomAt(px, py, Math.exp(-Math.max(-50, Math.min(50, e.deltaY)) * 0.012)); return; } // pinch
+  const notch = e.deltaMode === 1 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && Number.isInteger(e.deltaY));
+  if (notch && performance.now() - lastPadAt > 400) { zoomAt(px, py, e.deltaY < 0 ? 1.15 : 1 / 1.15); return; }
+  lastPadAt = performance.now();
+  state.userView = true; state.view.ox -= e.deltaX; state.view.oy -= e.deltaY; draw();
+}, { passive: false });
 
 function selectionChanged() { renderPerformers(); renderProps(); renderDotInfo(); draw(); }
 function switchTabIfIdle(tab) { if (window.innerWidth > 1000) showTab(tab); }
@@ -2165,6 +2179,14 @@ function init() {
   $('optGhost').onchange = draw; $('optLabels').onchange = draw;
   $('btnUndo').onclick = undo; $('btnRedo').onclick = redo;
 
+  window.addEventListener('keyup', e => {
+    if (e.key !== ' ' || !state.space) return;
+    const panned = state.space.panned; state.space = null;
+    if (!state.pointer) canvas.style.cursor = state.tool === 'pan' ? 'grab' : (state.tool === 'select' ? 'default' : 'crosshair'); // cursor back
+    if (panned) return;
+    if (rehearseOpen()) { rehearsal.running ? pause() : startRehearsal(); } else state.playing ? pause() : play();
+  });
+  window.addEventListener('blur', () => { state.space = null; });
   window.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); downloadShow(); return; }
     const tag = (e.target.tagName || '').toLowerCase();
@@ -2175,12 +2197,24 @@ function init() {
     if (mod && k.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (mod && k.toLowerCase() === 'a') { e.preventDefault(); state.show.performers.forEach(p => state.sel.add(p.id)); selectionChanged(); return; }
     if (mod) return;
-    if (k === ' ') { e.preventDefault(); if (rehearseOpen()) { rehearsal.running ? pause() : startRehearsal(); } else state.playing ? pause() : play(); return; }
+    if (k === ' ') { // tap = play / stop (on release); hold and drag = move the view
+      e.preventDefault();
+      if (!e.repeat && !state.space) { state.space = { panned: false }; if (state.mode === '2d') canvas.style.cursor = 'grab'; }
+      return;
+    }
     if (k.toLowerCase() === 'r' && !e.shiftKey) { toggleRehearse(); return; }
     if (state.appMode !== 'write') { if (k === 'Escape' && state.appMode === 'students') setAppMode('write'); return; }
     if (k === 'Escape' && (state.playing || rehearsal.running)) { stopPlayback(); return; }
     if (k === 'Escape') { state.arcPts = []; state.sel.clear(); state.selProp = null; setTool('select'); selectionChanged(); return; }
     const step = e.shiftKey ? 4 : 1;
+    if (k.startsWith('Arrow') && !state.sel.size && !state.selProp && state.mode === '2d') { // nothing selected: arrows move the view
+      e.preventDefault();
+      const d = e.shiftKey ? 240 : 80;
+      state.userView = true;
+      if (k === 'ArrowLeft') state.view.ox += d; if (k === 'ArrowRight') state.view.ox -= d;
+      if (k === 'ArrowUp') state.view.oy += d; if (k === 'ArrowDown') state.view.oy -= d;
+      draw(); return;
+    }
     if (k === 'ArrowLeft') { e.preventDefault(); nudge(-step, 0); return; }
     if (k === 'ArrowRight') { e.preventDefault(); nudge(step, 0); return; }
     if (k === 'ArrowUp') { e.preventDefault(); nudge(0, step); return; }
