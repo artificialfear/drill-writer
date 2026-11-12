@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.23.3 — 2026-11-11
+- **Horns down now matches this band's carry position** in 3D:
+  - **Flute, piccolo, clarinet, trumpet, mellophone, trombone, baritone:** held level and pointing forward the way they play, lifted so the mouthpiece or lip plate is at eye level, a few inches off the face. The clarinet is held straight out level instead of angled down.
+  - **Saxophones:** lying flat across the chest, bell end to the marcher's right.
+  - **Sousaphone and percussion:** unchanged.
+
 ## 0.23.2 — 2026-11-11
 - **Move the field while zoomed in, without Fit:**
   - **Hold Space and drag.** Works in any tool. A quick tap of Space still plays and stops (it now acts on release).

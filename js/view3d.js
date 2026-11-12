@@ -397,19 +397,35 @@ function plume(top, scale, seed) {
   return out;
 }
 
-// Horns down: the whole instrument (and the hands holding it) swings down in front of the body.
-// Rotate about the point between the hands, then move that point down to the stomach.
+// Horns down (this band's carry position):
+//  • flute, piccolo, clarinet, trumpet, mellophone, trombone, baritone: held level, pointing forward (the way
+//    they play), lifted so the mouthpiece / lip plate is at eye level and pulled a few inches off the face
+//  • saxophones: lying flat across the chest, bell end to the marcher's right
+//  • sousaphone and percussion: unchanged (percussion uses its own sticks-in pose)
+const EYE_CARRY = V(0, 2.82, 0.36); // where the mouthpiece goes: eye level, ~4" in front of the face
 function hornsDown(ins, key) {
-  if (key === 'tuba') return; // the sousaphone stays on the shoulder
-  const P = ins.hands.L.clone().add(ins.hands.R).multiplyScalar(0.5);
-  let R, to;
-  if (key === 'flute' || key === 'piccolo') { R = new THREE.Matrix4().makeRotationZ(1.25); to = V(-0.12, 1.98, 0.3); } // flute points down the right side
-  else if (key === 'clarinet' || key.endsWith('sax')) { R = new THREE.Matrix4().makeRotationX(0.55); to = V(P.x, 1.86, 0.36); }
-  else { R = new THREE.Matrix4().makeRotationX(1.15); to = V(P.x, 1.95, 0.38); } // bell swings from forward to down
-  const M = new THREE.Matrix4().makeTranslation(to.x, to.y, to.z).multiply(R).multiply(new THREE.Matrix4().makeTranslation(-P.x, -P.y, -P.z));
+  if (key === 'tuba') return;
+  let M;
+  const at = (to, R, from) => new THREE.Matrix4().makeTranslation(to.x, to.y, to.z).multiply(R).multiply(new THREE.Matrix4().makeTranslation(-from.x, -from.y, -from.z));
+  if (key.endsWith('sax')) {
+    // body (top → bottom, pointing down) turned to point to the marcher's right (−X), flat across the chest
+    const P = ins.hands.L.clone().add(ins.hands.R).multiplyScalar(0.5);
+    M = at(V(-0.04, 2.12, 0.4), new THREE.Matrix4().makeRotationZ(-Math.PI / 2), P);
+  } else if (key === 'flute' || key === 'piccolo') {
+    // level it (it normally slopes down a little toward the end) and lift the lip plate to eye level
+    const flute = key === 'flute', len = flute ? 1.18 : 0.56, drop = flute ? 0.11 : 0.05;
+    const lip = V(0.12 - 0.12, 2.71 - drop * 0.12 / len, 0.21);
+    M = at(EYE_CARRY, new THREE.Matrix4().makeRotationZ(-Math.atan2(drop, len)), lip);
+  } else {
+    // brass + clarinet: rotate about the mouthpiece until the instrument is level, then lift it to eye level
+    const slope = { trumpet: 0.04 / 0.42, mello: 0.04 / 0.48, baritone: 0.04 / 0.46, trombone: 0, clarinet: 0.72 / 0.32 }[key] ?? 0;
+    // +X rotation tips the far end down, so a horn tilted up gets +atan(slope); the clarinet (pointing down) gets −
+    const a = key === 'clarinet' ? -Math.atan(slope) : Math.atan(slope);
+    M = at(EYE_CARRY, new THREE.Matrix4().makeRotationX(a), MOUTH);
+  }
   for (const geo of ins.geos) geo.applyMatrix4(M);
   ins.hands = { L: ins.hands.L.clone().applyMatrix4(M), R: ins.hands.R.clone().applyMatrix4(M) };
-  ins.elbows = null;
+  ins.elbows = null; // let the arms find a natural bend for the new hand spots
 }
 
 const upperCache = new Map();
