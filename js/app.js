@@ -1719,17 +1719,27 @@ function updateSelBar() {
   const top = fits(above) ? above : fits(below) ? below : 44;
   bar.style.left = `${left}px`; bar.style.top = `${top}px`;
 }
+// "Select a section": one small button in the corner of the field; the list of sections pops up above it
+// only when asked for, so it never covers marchers near the front sideline.
 function renderQuickSel() {
   const qs = $('quickSel'); if (!qs) return;
   const present = SECTIONS.filter(sec => state.show.performers.some(p => p.section === sec.key));
-  qs.innerHTML = '<span class="help">Select:</span>' + present.map(sec =>
-    `<button data-sec="${sec.key}" title="Select all ${sec.name} (Shift adds)"><span class="swatch" style="background:${sec.color}"></span>${sec.name}</button>`).join('')
-    + (present.length > 1 ? '<button data-sec="*">Everyone</button>' : '');
-  qs.querySelectorAll('button').forEach(b => b.onclick = ev => {
+  qs.innerHTML = `<div class="qs-list" hidden>${present.map(sec =>
+    `<button data-sec="${sec.key}" title="Select all ${sec.name} (Shift adds)"><span class="swatch" style="background:${sec.color}"></span>${sec.name}</button>`).join('')}`
+    + (present.length > 1 ? '<button data-sec="*">Everyone</button>' : '') + '</div>'
+    + '<button class="qs-toggle" title="Select a whole section at once">Select a section ▴</button>';
+  const list = qs.querySelector('.qs-list'), tog = qs.querySelector('.qs-toggle');
+  tog.onclick = () => { list.hidden = !list.hidden; tog.classList.toggle('on', !list.hidden); };
+  list.querySelectorAll('button').forEach(b => b.onclick = ev => {
     if (!(ev.shiftKey || ev.ctrlKey || ev.metaKey)) { state.sel.clear(); state.selProp = null; }
     state.show.performers.filter(p => b.dataset.sec === '*' || p.section === b.dataset.sec).forEach(p => state.sel.add(p.id));
+    list.hidden = true; tog.classList.remove('on');
     selectionChanged();
   });
+}
+function closeQuickSel() {
+  const list = document.querySelector('#quickSel .qs-list'); if (!list || list.hidden) return;
+  list.hidden = true; document.querySelector('#quickSel .qs-toggle').classList.remove('on');
 }
 
 // ---------------- Rehearsal mode ----------------
@@ -2068,6 +2078,7 @@ function init() {
   $('bkClose').onclick = () => { $('backupDlg').hidden = true; };
   $('bkDownload').onclick = () => { downloadShow(); openBackups(); };
   $('nagGo').onclick = nagGo; $('nagLater').onclick = nagLater;
+  canvas.addEventListener('pointerdown', closeQuickSel); // working on the field closes the section list
   // form options: redraw the preview right away when they change
   for (const id of ['optInterval', 'optAcross', 'optDeep', 'optCols', 'optAnchor']) $(id).addEventListener('change', () => draw());
   $('optCols').addEventListener('input', () => draw());

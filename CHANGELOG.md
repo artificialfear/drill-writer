@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.23.1 — 2026-11-11
+- The row of section buttons (Flute, Clarinet, …) no longer covers the front of the field. It's now one small **Select a section ▴** button in the bottom-left corner. Clicking it opens the list as a pop-up menu above the button; it closes after a pick or a click on the field. Shift still adds to the selection.
+
 ## 0.23.0 — 2026-11-11
 - **Block intervals both ways.** With the Block tool active, the selection bar shows:
   - **Across:** steps between marchers left to right (1–8), plus **On the yard lines (8)** (every file on a yard line) and **On + splitting (4)** (files on the lines and halfway between). With a yard-line option, the click snaps to the nearest line or split.
