@@ -302,3 +302,8 @@ body[data-mode="students"] .students-main { display: grid; grid-template-columns
 .bk-list { list-style: none; padding: 0; margin: 6px 0 0; }
 .bk-list li { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); }
 .bk-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* block options show while the Block tool is active; Interval shows for the other tools */
+.sb-block-opts { display: none; gap: 8px; align-items: center; flex-wrap: wrap; }
+body[data-active-tool="block"] .sb-block-opts { display: flex; }
+body[data-active-tool="block"] .sb-line-opt { display: none; }

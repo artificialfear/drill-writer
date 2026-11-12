@@ -78,13 +78,34 @@
         <button class="tool sb-tool" data-tool="block" title="Block (B): click the front-left corner">▦ Block</button>
         <button class="tool sb-tool" data-tool="circle" title="Circle (C): click the center">◯ Circle</button>
       </span>
-      <label class="sb-opt" title="Spacing between dots for Line, Block and Circle">Interval
+      <label class="sb-opt sb-line-opt" title="Spacing between dots (steps) for Line and Circle">Interval
         <select id="optInterval">
           <option value="0">Fit</option><option value="1">1</option><option value="1.5">1.5</option>
           <option value="2" selected>2</option><option value="2.5">2.5</option><option value="3">3</option>
           <option value="4">4</option><option value="6">6</option><option value="8">8</option>
+          <option value="y8">On the yard lines (8)</option><option value="y4">On + splitting (4)</option>
         </select></label>
-      <label class="sb-opt" title="Columns for Block">Cols <input id="optCols" type="number" min="1" max="40" value="6"></label>
+      <span class="sb-block-opts">
+        <label class="sb-opt" title="Block: steps between marchers left to right">Across
+          <select id="optAcross">
+            <option value="1">1</option><option value="1.5">1.5</option><option value="2" selected>2</option>
+            <option value="2.5">2.5</option><option value="3">3</option><option value="4">4</option><option value="8">8</option>
+            <option value="y8">On the yard lines (8)</option><option value="y4">On + splitting (4)</option>
+          </select></label>
+        <label class="sb-opt" title="Block: steps between ranks front to back">Deep
+          <select id="optDeep">
+            <option value="1">1</option><option value="1.5">1.5</option><option value="2" selected>2</option>
+            <option value="2.5">2.5</option><option value="3">3</option><option value="4">4</option><option value="6">6</option>
+          </select></label>
+        <label class="sb-opt" title="Block: marchers per rank (left to right)">Cols <input id="optCols" type="number" min="1" max="40" value="6"></label>
+        <label class="sb-opt" title="Block: put the front or back rank on a sideline or hash">Rank on
+          <select id="optAnchor">
+            <option value="">Where I click</option>
+            <option value="f:FSL">Front rank on front sideline</option><option value="f:FH">Front rank on front hash</option>
+            <option value="f:BH">Front rank on back hash</option><option value="b:BH">Back rank on back hash</option>
+            <option value="b:BSL">Back rank on back sideline</option>
+          </select></label>
+      </span>
       <span class="sb-group">
         <button data-act="rotL" title="Rotate 15° left">⟲</button>
         <button data-act="rotR" title="Rotate 15° right">⟳</button>

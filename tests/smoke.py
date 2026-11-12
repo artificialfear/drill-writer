@@ -493,12 +493,37 @@ with sync_playwright() as p:
     check('loading the other tab\'s version works', bp.evaluate('__dw.show.title') == 'Edited in tab 2' and not bp.is_visible('#backupNag'))
     bp2.close()
     # the reminder appears after lots of edits with no recent download
-    bp.evaluate("localStorage.setItem('drillwriter.backup.meta', JSON.stringify({lastDownload: Date.now() - 5*864e5, edits: 40, snoozeUntil: 0}))")
+    bp.evaluate("localStorage.setItem('drillwriter.backup.meta', JSON.stringify({lastDownload: Date.now() - 5*864e5, since: Date.now() - 4*864e5, edits: 40, snoozeUntil: 0}))")
     bp.reload(); bp.wait_for_function('window.__dw && window.__dw.show')
     check('download reminder shows after days without a file', bp.is_visible('#backupNag') and 'since you downloaded' in bp.inner_text('#backupNag'))
     bp.screenshot(path=f'{SHOTS}/25-reminder.png')
     bp.click('#nagLater')
     check('Not now hides the reminder', not bp.is_visible('#backupNag'))
+    # ---------- block with separate across / deep intervals, yard-line spacing, rank on the front hash ----------
+    bp.click('#btnSample'); bp.wait_for_timeout(300)
+    tr = bp.evaluate("__dw.show.performers.filter(p=>p.section==='trumpet').slice(0,8).map(p=>p.id)")
+    bp.evaluate(f"__dw.sel = new Set({json.dumps(tr)})"); bp.evaluate("document.querySelector('#field').dispatchEvent(new Event('pointerleave'))")
+    bbox = bp.locator('#field').bounding_box()
+    def bscr(x, y):
+        v = bp.evaluate('({...__dw.view})')
+        return bbox['x'] + v['ox'] + x * v['scale'], bbox['y'] + v['oy'] - y * v['scale']
+    bp.click('#selBar [data-tool=block]')
+    check('Block shows Across / Deep / Rank on (and hides Interval)', bp.is_visible('#optAcross') and bp.is_visible('#optAnchor') and not bp.is_visible('#optInterval'))
+    bp.select_option('#optAcross', 'y4'); bp.select_option('#optDeep', '2'); bp.fill('#optCols', '4'); bp.select_option('#optAnchor', 'f:FH')
+    cx, cy = bscr(-9.3, 50); bp.mouse.move(cx, cy); bp.wait_for_timeout(100)
+    bp.screenshot(path=f'{SHOTS}/26-block-options.png')
+    bp.mouse.click(cx, cy)
+    pts = bp.evaluate(f"{json.dumps(tr)}.map(id => __dw.show.sets[0].pos[id])")
+    bxs = sorted({round(q['x'], 2) for q in pts}); bys = sorted({round(q['y'], 2) for q in pts})
+    check('block files land on and splitting the yard lines', bxs == [-8, -4, 0, 4])
+    check('block front rank on the front hash, 2 steps deep', bys == [28.44, 30.44])
+    # line with "on the yard lines": every dot on a yard line, even on a diagonal
+    bp.evaluate(f"__dw.sel = new Set({json.dumps(tr[:4])})")
+    bp.click('#selBar [data-tool=line]'); bp.select_option('#optInterval', 'y8')
+    x0, y0 = bscr(-47, 45); x1, y1 = bscr(-14, 78)  # well away from the floating selection bar
+    bp.mouse.move(x0, y0); bp.mouse.down(); bp.mouse.move(x1, y1, steps=6); bp.mouse.up()
+    lx = sorted(round(bp.evaluate(f"__dw.show.sets[0].pos['{i}'].x"), 2) for i in tr[:4])
+    check('line on the yard lines puts every dot on a yard line', lx == [-48, -40, -32, -24])
     check('no errors while protecting work', not berr)
     bc.close()
 

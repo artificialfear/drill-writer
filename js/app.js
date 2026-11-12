@@ -38,7 +38,13 @@ window.__dw = state; // handy for testing in the console
 
 const opt = {
   get snap() { return parseFloat($('optSnap').value); },
-  get interval() { return parseFloat($('optInterval').value); },
+  // 'y8' = on the yard lines (8 steps, every dot on a line), 'y4' = on + splitting (4 steps, on lines and halfway)
+  get interval() { const v = $('optInterval').value; return v[0] === 'y' ? +v.slice(1) : parseFloat(v); },
+  get intervalYard() { const v = $('optInterval').value; return v[0] === 'y' ? +v.slice(1) : 0; },
+  get across() { const v = $('optAcross').value; return v[0] === 'y' ? +v.slice(1) : parseFloat(v); },
+  get acrossYard() { const v = $('optAcross').value; return v[0] === 'y' ? +v.slice(1) : 0; },
+  get deep() { return parseFloat($('optDeep').value); },
+  get anchor() { return $('optAnchor').value; },
   get cols() { return Math.max(1, parseInt($('optCols').value, 10) || 1); },
   get ghost() { return $('optGhost').checked; },
   get labels() { return $('optLabels').checked; }
@@ -57,7 +63,7 @@ const r2 = v => Math.round(v * 100) / 100;
 //  3. the downloaded file (Save / Ctrl+S) — the only copy that survives cleared browser data or a new computer,
 //     so the app reminds you when it's been a while
 const META_KEY = 'drillwriter.backup.meta';
-let meta = { lastDownload: 0, edits: 0, snoozeUntil: 0 };
+let meta = { lastDownload: 0, edits: 0, since: 0, snoozeUntil: 0 }; // since = first change not yet in a downloaded file
 try { meta = { ...meta, ...JSON.parse(localStorage.getItem(META_KEY) || '{}') }; } catch (e) {}
 const saveMeta = () => { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) {} };
 const save = { ok: true, at: 0, pending: false, conflict: false, copies: true, persisted: null };
@@ -101,15 +107,16 @@ function renderSaveStatus() {
   else { text = '✓ Saved'; cls = 'ok'; tip = `Saved in this browser ${save.at ? 'at ' + new Date(save.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''}. Last file download: ${ago(meta.lastDownload)}. Click for backups.`; }
   el.textContent = text; el.className = 'save-status ' + cls; el.title = tip;
 }
-// "download a copy" reminder: after a good amount of work with no file downloaded in 3+ days
+// "download a copy" reminder: when there's real work (20+ changes) that has gone 3+ days without being in a
+// downloaded file — measured from the first change after the last download, so a brand-new show isn't nagged
 function maybeNag() {
   const bar = $('backupNag'); if (!bar || save.conflict) return;
-  const due = state.show.performers.length && meta.edits >= 20 && Date.now() - meta.lastDownload > 3 * 864e5 && Date.now() > meta.snoozeUntil;
+  const due = state.show.performers.length && meta.edits >= 20 && meta.since && Date.now() - meta.since > 3 * 864e5 && Date.now() > meta.snoozeUntil;
   if (!due) { if (bar.dataset.kind === 'nag') bar.hidden = true; return; }
   bar.dataset.kind = 'nag';
   $('nagText').textContent = meta.lastDownload
-    ? `It's been ${ago(meta.lastDownload).replace(' ago', '')} since you downloaded a copy of this show. The copy in this browser can be lost if browser data is cleared.`
-    : 'You haven\'t downloaded a copy of this show yet. The copy in this browser can be lost if browser data is cleared.';
+    ? `It's been ${ago(meta.lastDownload).replace(' ago', '')} since you downloaded a copy of this show, and you've made changes since. The copy in this browser can be lost if browser data is cleared.`
+    : `You've been working on this show for ${ago(meta.since).replace(' ago', '')} without downloading a copy. The copy in this browser can be lost if browser data is cleared.`;
   $('nagGo').textContent = 'Download a backup file'; $('nagLater').textContent = 'Not now';
   bar.hidden = false;
 }
@@ -121,7 +128,7 @@ function downloadShow(show = state.show, name) {
   a.download = name || `${(show.title || 'show').replace(/[^\w\- ]+/g, '').trim() || 'show'} ${stamp}.drill.json`;
   a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   if (show === state.show) {
-    meta.lastDownload = Date.now(); meta.edits = 0; saveMeta();
+    meta.lastDownload = Date.now(); meta.edits = 0; meta.since = 0; saveMeta();
     if ($('backupNag').dataset.kind === 'nag') $('backupNag').hidden = true;
     renderSaveStatus(); toast('Downloaded — keep it somewhere safe (Google Drive, email it to yourself…).');
   }
@@ -182,6 +189,7 @@ async function openBackups() {
 }
 function snapshot() { return JSON.stringify({ show: state.show, cur: state.cur }); }
 function pushUndo() {
+  if (!meta.edits || !meta.since) meta.since = Date.now();
   meta.edits++; saveMeta(); maybeNag(); // counts toward the "download a copy" reminder
   state.undo.push(snapshot());
   if (state.undo.length > 150) state.undo.shift();
@@ -463,14 +471,20 @@ function snapAngle(a, b) {
   const step = Math.PI / 4, ang = Math.round(Math.atan2(dy, dx) / step) * step;
   return { x: a.x + Math.cos(ang) * len, y: a.y + Math.sin(ang) * len };
 }
-function lineTargets(a, bRaw, free) {
+// nearest yard line (every 8 steps from the 50) or yard line / split (every 4)
+const onYard = (x, every) => Math.round(x / every) * every;
+function lineTargets(aRaw, bRaw, free) {
   const ids = selIds(); if (!ids.length) return null;
+  const yard = opt.intervalYard;
+  const a = yard ? { x: onYard(aRaw.x, yard), y: aRaw.y } : aRaw;
   const b = free ? bRaw : snapAngle(a, bRaw);
   const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
   const dir = len > 1e-6 ? { x: dx / len, y: dy / len } : { x: 1, y: 0 };
   const order = sortAlong(ids, dir), n = order.length, iv = opt.interval, out = {};
+  // yard-line spacing: step along the line so every dot lands on a yard line (or split), even on a diagonal
+  const per = yard && Math.abs(dir.x) > 0.2 ? yard / Math.abs(dir.x) : iv;
   order.forEach((id, i) => {
-    const t = iv > 0 ? i * iv : (n > 1 ? len * i / (n - 1) : 0);
+    const t = iv > 0 ? i * per : (n > 1 ? len * i / (n - 1) : 0);
     out[id] = { x: r2(a.x + dir.x * t), y: r2(a.y + dir.y * t) };
   });
   return out;
@@ -500,12 +514,22 @@ function arcTargets(p0, p1, pb) {
   });
   return out;
 }
-function blockTargets(corner) {
+// Block: click = the front-left corner (as seen from the press box). Separate spacing left-to-right (Across,
+// which can put every file on the yard lines or on + splitting them) and front-to-back (Deep); the front or
+// back rank can be pinned to a sideline or hash.
+function blockTargets(clicked) {
   const ids = selIds(); if (!ids.length) return null;
-  const iv = opt.interval || 2, cols = opt.cols;
+  const ax = opt.across || 2, dy = opt.deep || 2, cols = Math.min(opt.cols, ids.length), yard = opt.acrossYard;
+  const rows = Math.ceil(ids.length / cols);
+  const corner = { x: yard ? onYard(clicked.x, yard) : clicked.x, y: clicked.y };
+  if (opt.anchor) {
+    const [which, key] = opt.anchor.split(':');
+    const line = refLines(state.show.field).find(l => l.key === key);
+    if (line) corner.y = which === 'f' ? line.y : line.y - (rows - 1) * dy;
+  }
   const order = [...ids].sort((a, b) => (posOf(a).y - posOf(b).y) || (posOf(a).x - posOf(b).x));
   const out = {};
-  order.forEach((id, i) => { out[id] = { x: r2(corner.x + (i % cols) * iv), y: r2(corner.y + Math.floor(i / cols) * iv) }; });
+  order.forEach((id, i) => { out[id] = { x: r2(corner.x + (i % cols) * ax), y: r2(corner.y + Math.floor(i / cols) * dy) }; });
   return out;
 }
 function circleTargets(center) {
@@ -611,12 +635,13 @@ const toolHints = {
   select: 'Click or drag a box to select · drag dots to move · arrow keys nudge 1 step (Shift = 4)',
   line: 'Drag to draw a line · selected performers fill it in order · Shift = any angle · Esc = cancel',
   arc: 'Click the start, click the end, then click where the arc should bulge · Esc = cancel',
-  block: 'Click where the FRONT-LEFT corner of the block goes · Esc = cancel',
+  block: 'Click the FRONT-LEFT corner (Side 1 end of the front rank) · Esc = cancel',
   circle: 'Click the center of the circle · Esc = cancel',
   pan: 'Drag to pan · scroll to zoom'
 };
 function setTool(t) {
   state.tool = t; state.arcPts = [];
+  document.body.dataset.activeTool = t; // shows the Block options (Across / Deep / Cols / Rank on) while Block is active
   if (state.mode === '3d' && t !== 'select') setMode('2d'); // drawing tools only work top-down
   document.querySelectorAll('.tool').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
   $('hudHint').textContent = state.mode === '3d' ? HINT_3D : (toolHints[t] || '');
@@ -2043,6 +2068,9 @@ function init() {
   $('bkClose').onclick = () => { $('backupDlg').hidden = true; };
   $('bkDownload').onclick = () => { downloadShow(); openBackups(); };
   $('nagGo').onclick = nagGo; $('nagLater').onclick = nagLater;
+  // form options: redraw the preview right away when they change
+  for (const id of ['optInterval', 'optAcross', 'optDeep', 'optCols', 'optAnchor']) $(id).addEventListener('change', () => draw());
+  $('optCols').addEventListener('input', () => draw());
   // save right away if the tab is being closed or hidden
   window.addEventListener('beforeunload', () => { if (saveTimer) writeNow(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) writeNow(); });

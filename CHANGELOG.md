@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.23.0 — 2026-11-11
+- **Block intervals both ways.** With the Block tool active, the selection bar shows:
+  - **Across:** steps between marchers left to right (1–8), plus **On the yard lines (8)** (every file on a yard line) and **On + splitting (4)** (files on the lines and halfway between). With a yard-line option, the click snaps to the nearest line or split.
+  - **Deep:** steps between ranks front to back (1–6).
+  - **Cols:** marchers per rank.
+  - **Rank on:** where I click, or the front rank on the front sideline / front hash / back hash, or the back rank on the back hash / back sideline.
+- **Line** gets the same yard-line options in its Interval list. Every dot lands on a yard line (or split), even on a 45° diagonal.
+- The download reminder now waits for 3+ days of changes that aren't in a downloaded file, measured from the first change after the last download. A brand-new show is no longer nagged after a few minutes of work.
+
 ## 0.22.0 — 2026-11-10
 - **Protecting work.**
   - **Save status** in the header: ✓ Saved / Saving… / ⚠ Not saved (if the browser refuses to save) / ⚠ Changed in another tab. Click it to open **Backups**.
